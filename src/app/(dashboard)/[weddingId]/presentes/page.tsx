@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { UploadButton } from "@/lib/uploadthing";
 import { AIGiftAssistant } from "./ai-assistant";
 
 export default function GiftsDashboardPage({ params }: { params: Promise<{ weddingId: string }> }) {
@@ -221,8 +222,32 @@ export default function GiftsDashboardPage({ params }: { params: Promise<{ weddi
                     <Input type="number" step="0.01" {...register("price", { required: true })} />
                   </div>
                   <div className="space-y-2">
-                    <Label>URL da Imagem</Label>
-                    <Input {...register("imageUrl")} placeholder="https://..." />
+                    <Label>Imagem do Presente</Label>
+                    {watch("imageUrl") ? (
+                      <div className="relative rounded-md overflow-hidden h-32 w-full border">
+                        <img src={watch("imageUrl")} alt="Preview" className="object-cover w-full h-full" />
+                        <Button 
+                          variant="destructive" 
+                          size="icon" 
+                          className="absolute top-2 right-2 w-8 h-8"
+                          onClick={() => setValue("imageUrl", "")}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <UploadButton
+                        endpoint="imageUploader"
+                        onClientUploadComplete={(res) => {
+                          setValue("imageUrl", res[0].url);
+                          toast.success("Imagem enviada com sucesso!");
+                        }}
+                        onUploadError={(error: Error) => {
+                          toast.error(`Erro ao enviar: ${error.message}`);
+                        }}
+                      />
+                    )}
+                    <Input type="hidden" {...register("imageUrl")} />
                   </div>
                   <div className="grid gap-2">
                     <Label>Quantidade de Cotas</Label>
