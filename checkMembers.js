@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); async function main() { const members = await prisma.weddingMember.findMany({ where: { wedding: { slug: 'joao-e-maria' } }, include: { user: true } }); console.log(JSON.stringify(members, null, 2)); } main().finally(() => prisma.disconnect);

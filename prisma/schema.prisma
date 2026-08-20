@@ -1,0 +1,573 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+  role          Role      @default(COUPLE)
+
+  // Campos da Agência (relevantes para PLANNER)
+  phone       String?
+  companyName String? // Nome fantasia da agência
+  cnpj        String?
+  instagram   String? // @perfil
+  website     String?
+  address     String?
+  city        String?
+  logoUrl     String?
+
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  accounts    Account[]
+  sessions    Session[]
+  memberships WeddingMember[]
+  events      Event[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Wedding {
+  id                String    @id @default(uuid())
+  slug              String    @unique
+  partner1Name      String
+  partner1Role      String    @default("Noiva")
+  partner2Name      String
+  partner2Role      String    @default("Noivo")
+  date              DateTime
+  ceremonyDate      DateTime?
+  receptionDate     DateTime?
+  ceremonyLocation  String?
+  ceremonyPlaceId   String?
+  receptionLocation String?
+  receptionPlaceId  String?
+  venue             String?
+  theme             String?
+  dressCode         String?
+  ourStory          String?   @db.Text
+  coverImageUrl     String?
+  primaryColor      String?
+  secondaryColor    String?
+
+  // Privacidade & Acesso
+  isPublicSiteEnabled Boolean @default(true)
+  sitePassword        String?
+
+  // Flexibilidade do Evento
+  hasReception   Boolean @default(true)
+  isSameLocation Boolean @default(false)
+
+  // RSVP
+  rsvpDeadline DateTime?
+  rsvpMessage  String?   @db.Text
+
+  // Integrações & Música
+  spotifyLink      String?
+  hashtag          String?
+  moderateMessages Boolean @default(false)
+
+  // Dicas aos Convidados
+  hasAccommodationTips Boolean @default(false)
+  accommodationTips    String? @db.Text
+  ceremonyParkingType  String?
+  receptionParkingType String?
+
+  families              Family[]
+  gifts                 Gift[]
+  giftCategories        GiftCategory[]
+  guests                Guest[]
+  groups                GuestGroup[]
+  GuestMessage          GuestMessage[]
+  seatingPreferences    SeatingPreference[]
+  tables                Table[]
+  transactions          Transaction[]
+  venueElements         VenueElement[]
+  members               WeddingMember[]
+  messages              WhatsAppMessage[]
+  vendorRecommendations VendorRecommendation[]
+  partyMembers          WeddingPartyMember[]
+  events                Event[]
+  taskCategories        TaskCategory[]
+  tasks                 Task[]
+}
+
+model VendorRecommendation {
+  id                      String     @id @default(uuid())
+  weddingId               String
+  type                    VendorType // SALON, BARBERSHOP, SUIT_SHOP, HOTEL
+  name                    String
+  address                 String?
+  placeId                 String?
+  recommendedProfessional String?
+  notes                   String?
+  wedding                 Wedding    @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+}
+
+model WeddingPartyMember {
+  id           String              @id @default(uuid())
+  weddingId    String
+  type         PartyMemberType
+  side         PartyMemberSide     @default(BOTH)
+  name         String
+  pairedWithId String?             @unique
+  pairedWith   WeddingPartyMember? @relation("PartyPair", fields: [pairedWithId], references: [id])
+  pairedOf     WeddingPartyMember? @relation("PartyPair")
+  isDeceased   Boolean             @default(false)
+  isMentioned  Boolean             @default(true)
+  hasTribute   Boolean             @default(false)
+  attireColor  String?
+  accompanies  String?
+  order        Int                 @default(0)
+  guestId      String?             @unique
+  guest        Guest?              @relation(fields: [guestId], references: [id], onDelete: SetNull)
+  wedding      Wedding             @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+}
+
+model WeddingMember {
+  id        String     @id @default(uuid())
+  userId    String
+  weddingId String
+  role      MemberRole @default(VIEWER)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wedding   Wedding    @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  taskAssignees TaskAssignee[]
+
+  @@unique([userId, weddingId])
+}
+
+model Guest {
+  id                  String              @id @default(uuid())
+  weddingId           String
+  name                String
+  email               String?
+  phone               String?
+  cpf                 String?
+  familyId            String?
+  groupId             String?
+  rsvpStatus          RsvpStatus          @default(PENDING)
+  isPrimary           Boolean             @default(true)
+  dietaryRestrictions String[]
+  hasChildren         Boolean             @default(false)
+  childrenCount       Int                 @default(0)
+  needsTransport      Boolean             @default(false)
+  tableId             String?
+  qrCode              String              @unique
+  notes               String?
+  aiTags              String[]
+  aiAnalysis          Json?
+  checkedIn           Boolean             @default(false)
+  checkedInAt         DateTime?
+  whatsappStatus      WhatsAppStatus      @default(UNSENT)
+  whatsappMessageId   String?
+  token               String?             @unique
+  family              Family?             @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  group               GuestGroup?         @relation(fields: [groupId], references: [id])
+  table               Table?              @relation(fields: [tableId], references: [id])
+  wedding             Wedding             @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  seatingPreferenceA  SeatingPreference[] @relation("GuestA")
+  seatingPreferenceB  SeatingPreference[] @relation("GuestB")
+  messages            WhatsAppMessage[]
+  partyMember         WeddingPartyMember?
+  eventGuests         EventGuest[]
+}
+
+model Family {
+  id             String  @id @default(uuid())
+  weddingId      String
+  name           String
+  headOfFamilyId String?
+  wedding        Wedding @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  guests         Guest[]
+}
+
+model GuestGroup {
+  id        String  @id @default(uuid())
+  weddingId String
+  name      String
+  category  String?
+  guests    Guest[]
+  wedding   Wedding @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+}
+
+model Table {
+  id        String  @id @default(uuid())
+  weddingId String
+  name      String
+  capacity  Int
+  x         Float   @default(0)
+  y         Float   @default(0)
+  color     String?
+  guests    Guest[]
+  wedding   Wedding @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+}
+
+model SeatingPreference {
+  id        String                @id @default(uuid())
+  weddingId String
+  guestAId  String
+  guestBId  String
+  type      SeatingPreferenceType
+  source    PreferenceSource      @default(MANUAL)
+  guestA    Guest                 @relation("GuestA", fields: [guestAId], references: [id], onDelete: Cascade)
+  guestB    Guest                 @relation("GuestB", fields: [guestBId], references: [id], onDelete: Cascade)
+  wedding   Wedding               @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+}
+
+model WhatsAppMessage {
+  id               String        @id @default(uuid())
+  weddingId        String
+  guestId          String
+  type             MessageType
+  status           MessageStatus @default(QUEUED)
+  metaMessageId    String?
+  sentAt           DateTime?
+  deliveredAt      DateTime?
+  readAt           DateTime?
+  response         String?
+  aiParsedResponse Json?
+  guest            Guest         @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  wedding          Wedding       @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+}
+
+model VenueElement {
+  id        String      @id @default(uuid())
+  weddingId String
+  type      ElementType
+  name      String
+  x         Float       @default(0)
+  y         Float       @default(0)
+  width     Float       @default(200)
+  height    Float       @default(200)
+  color     String?
+  icon      String?
+  wedding   Wedding     @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+}
+
+model GuestMessage {
+  id         String   @id @default(uuid())
+  weddingId  String
+  authorName String
+  content    String
+  isPublic   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  wedding    Wedding  @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+}
+
+model Gift {
+  id           String         @id @default(cuid())
+  name         String
+  description  String?
+  price        Float
+  imageUrl     String?
+  quotaCount   Int            @default(1)
+  weddingId    String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  wedding      Wedding        @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  categories   GiftCategory[] @relation("GiftToCategory")
+  transactions Transaction[]
+}
+
+model GiftCategory {
+  id        String   @id @default(cuid())
+  name      String
+  color     String?
+  weddingId String
+  wedding   Wedding  @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  gifts     Gift[]   @relation("GiftToCategory")
+  createdAt DateTime @default(now())
+}
+
+model Transaction {
+  id            String            @id @default(cuid())
+  amount        Float
+  status        TransactionStatus @default(PENDING)
+  paymentMethod PaymentMethod
+  externalId    String?
+  guestName     String
+  guestMessage  String?
+  giftId        String?
+  weddingId     String
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  gift          Gift?             @relation(fields: [giftId], references: [id])
+  wedding       Wedding           @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+}
+
+enum Role {
+  ADMIN
+  COUPLE
+  PLANNER
+  CONCIERGE
+}
+
+enum MemberRole {
+  OWNER
+  PLANNER
+  CONCIERGE
+  VIEWER
+}
+
+enum RsvpStatus {
+  PENDING
+  CONFIRMED
+  DECLINED
+  WAITLIST
+}
+
+enum SeatingPreferenceType {
+  MUST_SIT_TOGETHER
+  SHOULD_NOT_SIT
+  PREFERS_NEAR
+}
+
+enum PreferenceSource {
+  MANUAL
+  AI_SUGGESTED
+}
+
+enum MessageType {
+  INVITE
+  RSVP_CONFIRM
+  REMINDER
+  CHANGE
+  THANK_YOU
+}
+
+enum MessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum WhatsAppStatus {
+  UNSENT
+  SENT
+  DELIVERED
+  READ
+  REPLIED
+}
+
+enum ElementType {
+  DANCE_FLOOR
+  BAR
+  STAGE
+  BUFFET
+  EXIT
+  RESTROOM
+  DECORATION
+}
+
+enum TransactionStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+enum PaymentMethod {
+  PIX
+  CREDIT_CARD
+}
+
+enum VendorType {
+  SALON
+  BARBERSHOP
+  SUIT_SHOP
+  HOTEL
+  BEAUTY_CLINIC
+  MAKEUP_ARTIST
+  HAIR_STYLIST
+  MANICURE
+  SPA
+  DRESS_SHOP
+  JEWELRY
+}
+
+enum PartyMemberType {
+  FATHER
+  MOTHER
+  GRANDFATHER
+  GRANDMOTHER
+  BROTHER
+  SISTER
+  SPONSOR
+  BRIDESMAID
+  GROOMSMAN
+  RING_BEARER
+  PAGE_BOY
+  FLOWER_GIRL
+  DEMOISELLE
+  CELEBRANT
+  RELATIVE
+  FRIEND
+  OTHER
+}
+
+enum PartyMemberSide {
+  PARTNER_1
+  PARTNER_2
+  BOTH
+}
+
+model Event {
+  id          String   @id @default(uuid())
+  weddingId   String
+  title       String
+  description String?
+  date        DateTime
+  startTime   String?
+  endTime     String?
+  location    String?
+  type        EventType @default(OTHER)
+  requiresRsvp Boolean   @default(false)
+  isPublicRsvp Boolean   @default(true)
+  
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  wedding     Wedding       @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  creator     User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  eventGuests EventGuest[]
+  task        Task?
+}
+
+model EventGuest {
+  id         String     @id @default(uuid())
+  eventId    String
+  guestId    String
+  rsvpStatus RsvpStatus @default(PENDING)
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  guest Guest @relation(fields: [guestId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, guestId])
+}
+
+enum EventType {
+  MEETING
+  CIVIL_REGISTRY
+  BRIDAL_SHOWER
+  BACHELOR_PARTY
+  REHEARSAL
+  FITTING
+  OTHER
+}
+
+// ========== CHECKLIST INTELIGENTE ==========
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum DueDateType {
+  FIXED
+  RELATIVE
+}
+
+model TaskCategory {
+  id        String  @id @default(uuid())
+  weddingId String
+  name      String
+  emoji     String?
+  color     String?
+  order     Int     @default(0)
+
+  wedding   Wedding @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+
+  @@unique([weddingId, name])
+}
+
+model Task {
+  id              String       @id @default(uuid())
+  weddingId       String
+  categoryId      String?
+  title           String
+  description     String?      @db.Text
+  status          TaskStatus   @default(TODO)
+  priority        TaskPriority @default(MEDIUM)
+  order           Int          @default(0)
+  isFromTemplate  Boolean      @default(false)
+
+  // === DATAS INTELIGENTES ===
+  dueDateType     DueDateType  @default(FIXED)
+  dueDate         DateTime?
+  relativeDays    Int?
+
+  completedAt     DateTime?
+
+  // === VÍNCULO COM EVENTO DO CALENDÁRIO ===
+  eventId         String?      @unique
+
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  wedding         Wedding       @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  category        TaskCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  event           Event?        @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  assignees       TaskAssignee[]
+}
+
+model TaskAssignee {
+  id        String        @id @default(uuid())
+  taskId    String
+  memberId  String
+
+  task      Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  member    WeddingMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, memberId])
+}
