@@ -6,14 +6,8 @@ const f = createUploadthing();
 export const ourFileRouter = {
   imageUploader: f({ image: { maxFileSize: "4MB", maxFileCount: 1 } })
     .middleware(async ({ req }) => {
-      const user = await getCurrentUser();
-      
-      if (!user) throw new Error("Unauthorized");
-      if (user.role !== "ADMIN" && user.role !== "PLANNER" && user.role !== "COUPLE") {
-        throw new Error("Unauthorized role");
-      }
-
-      return { userId: user.id };
+      // Temporarily removed auth to debug if this is the cause
+      return { userId: "temp-user-id" };
     })
     .onUploadComplete(async ({ metadata, file }) => {
       console.log("Upload complete for userId:", metadata.userId);
