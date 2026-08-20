@@ -90,7 +90,11 @@ export async function createWedding(data: {
     if (DEFAULT_GIFTS && DEFAULT_GIFTS.length > 0) {
       await prisma.gift.createMany({
         data: DEFAULT_GIFTS.map(gift => ({
-          ...gift,
+          name: gift.name,
+          description: gift.description,
+          price: gift.price,
+          imageUrl: gift.imageUrl,
+          quotaCount: gift.quotaCount,
           weddingId: wedding.id
         }))
       })
