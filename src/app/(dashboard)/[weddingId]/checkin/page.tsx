@@ -279,7 +279,7 @@ export default function CheckinPage() {
           <div className="w-full aspect-square relative flex items-center justify-center min-h-[300px]">
             <Scanner 
               onScan={handleCameraScan} 
-              components={{ audio: false, finder: true }}
+              components={{ finder: true }}
               styles={{ container: { width: '100%', height: '100%' } }}
             />
           </div>

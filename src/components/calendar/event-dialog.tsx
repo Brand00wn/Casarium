@@ -94,7 +94,7 @@ export function EventDialog({ open, onOpenChange, initialData, weddings, fixedWe
     }
   }, [open, initialData, fixedWeddingId])
 
-  const handleChange = (field: keyof EventFormData, value: string) => {
+  const handleChange = (field: keyof EventFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 

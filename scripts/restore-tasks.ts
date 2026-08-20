@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client"
+import { PrismaClient, TaskPriority } from "@prisma/client"
 import { DEFAULT_TASKS } from "../src/lib/checklist-templates"
 import { subDays } from "date-fns"
 
@@ -31,7 +31,7 @@ async function main() {
         categoryId,
         title: task.title,
         status: "TODO",
-        priority: task.priority,
+        priority: task.priority as TaskPriority,
         order: i,
         isFromTemplate: true,
         dueDateType: "RELATIVE",
