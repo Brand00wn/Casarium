@@ -94,7 +94,7 @@ export async function createWedding(data: {
                 coupleName: couple.name || "Noivos",
                 plannerName: user.name || "Seu cerimonialista",
                 weddingSlug: finalSlug,
-                loginEmail: couple.email,
+                loginEmail: couple.email || data.coupleEmail,
                 tempPassword,
                 siteUrl,
               }),
