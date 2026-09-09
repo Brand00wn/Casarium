@@ -12,16 +12,24 @@ const { auth } = NextAuth(authConfig)
 
 export default auth((req) => {
   const isLoggedIn = !!req.auth
-  const isOnAuthPage = req.nextUrl.pathname.startsWith('/login') || req.nextUrl.pathname.startsWith('/register')
-  const isApiAuthRoute = req.nextUrl.pathname.startsWith('/api/auth')
-  const isNextStatic = req.nextUrl.pathname.startsWith('/_next') || req.nextUrl.pathname.startsWith('/favicon.ico')
+  const pathname = req.nextUrl.pathname
+  const isApiAuthRoute = pathname.startsWith('/api/auth')
+  const isNextStatic = pathname.startsWith('/_next') || pathname.startsWith('/favicon.ico')
+  // Rotas públicas: autenticação + site público do casamento (RSVP, presentes, mural)
+  const isPublicRoute =
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/register') ||
+    pathname.startsWith('/forgot-password') ||
+    pathname.startsWith('/reset-password') ||
+    pathname.startsWith('/site')
 
   if (isNextStatic || isApiAuthRoute) {
     return
   }
 
-  if (isOnAuthPage) {
-    if (isLoggedIn) {
+  if (isPublicRoute) {
+    // Usuário logado tentando acessar tela de auth vai para a home (que redireciona por role)
+    if (isLoggedIn && (pathname.startsWith('/login') || pathname.startsWith('/register'))) {
       return Response.redirect(new URL('/', req.nextUrl))
     }
     return

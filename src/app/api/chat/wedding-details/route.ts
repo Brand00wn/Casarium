@@ -1,7 +1,7 @@
-import { google } from "@ai-sdk/google";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { getGoogleModel, toAiErrorMessage } from "@/lib/ai-model";
 import { syncPartyMemberToGuest } from "@/app/actions/party-guest-sync";
 
 export async function POST(req: Request) {
@@ -71,7 +71,7 @@ REGRAS:
 10. Sempre responda de forma amigável e luxuosa em 'responseToUser', resumindo o que você alterou no sistema.`;
 
     const result = await generateObject({
-      model: google("gemini-3.5-flash-lite"),
+      model: getGoogleModel(),
       system: systemPrompt,
       messages,
       schema: z.object({
@@ -435,6 +435,6 @@ REGRAS:
     });
   } catch (error: any) {
     console.error("AI Route Error:", error);
-    return new Response(error.message, { status: 500 });
+    return Response.json({ error: toAiErrorMessage(error) }, { status: 500 });
   }
 }

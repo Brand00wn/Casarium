@@ -37,8 +37,14 @@ export function WeddingAIAssistant({ weddingSlug, onDataChanged, onClose }: { we
       });
 
       if (!response.ok) {
-        const textError = await response.text();
-        throw new Error(textError);
+        let message = "Erro de conexão com a IA. Tente novamente.";
+        try {
+          const err = await response.json();
+          if (err?.error) message = err.error;
+        } catch {
+          message = (await response.text()) || message;
+        }
+        throw new Error(message);
       }
 
       const data = await response.json();
@@ -56,9 +62,9 @@ export function WeddingAIAssistant({ weddingSlug, onDataChanged, onClose }: { we
 
       setMessages((prev) => [...prev, assistantMessage]);
       onDataChanged();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      setMessages((prev) => [...prev, { id: Date.now().toString(), role: "assistant", content: "Oops, ocorreu um erro. Tente novamente." }]);
+      setMessages((prev) => [...prev, { id: Date.now().toString(), role: "assistant", content: `Erro de conexão com a IA: ${error?.message || "tente novamente."}` }]);
     } finally {
       setIsLoading(false);
     }

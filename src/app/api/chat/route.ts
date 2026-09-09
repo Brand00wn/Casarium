@@ -1,8 +1,8 @@
 // @ts-nocheck
-import { google } from '@ai-sdk/google';
 import { generateText, tool } from 'ai';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { getGoogleModel, toAiErrorMessage } from '@/lib/ai-model';
 import { assignGuestToTable, unassignGuestFromTable } from '@/app/actions/tables';
 
 export async function POST(req: Request) {
@@ -37,7 +37,7 @@ REGRAS:
     const { generateObject } = await import('ai');
 
     const result = await generateObject({
-      model: google('gemini-3.5-flash'),
+      model: getGoogleModel(),
       system: systemPrompt,
       messages,
       schema: z.object({
@@ -64,6 +64,7 @@ REGRAS:
 
     return Response.json({ text: result.object.responseToUser });
   } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+    console.error("AI Route Error:", error);
+    return Response.json({ error: toAiErrorMessage(error) }, { status: 500 });
   }
 }

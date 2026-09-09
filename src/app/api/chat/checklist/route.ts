@@ -1,8 +1,8 @@
 // @ts-nocheck
-import { google } from '@ai-sdk/google';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { getGoogleModel, toAiErrorMessage } from '@/lib/ai-model';
 
 export async function POST(req: Request) {
   try {
@@ -36,7 +36,7 @@ REGRAS E CAPACIDADES:
 6. PRIORIDADES aceitas: "LOW", "MEDIUM", "HIGH", "URGENT".`;
 
     const result = await generateObject({
-      model: google('gemini-3.5-flash'),
+      model: getGoogleModel(),
       system: systemPrompt,
       messages,
       schema: z.object({
@@ -129,6 +129,6 @@ REGRAS E CAPACIDADES:
 
   } catch (error: any) {
     console.error('Checklist AI Error:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ error: toAiErrorMessage(error) }, { status: 500 });
   }
 }

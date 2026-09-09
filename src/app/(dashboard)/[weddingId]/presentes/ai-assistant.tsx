@@ -38,8 +38,14 @@ export function AIGiftAssistant({ weddingSlug, onGiftAdded, onClose }: { wedding
       });
 
       if (!response.ok) {
-        const textError = await response.text();
-        throw new Error(textError);
+        let message = "Erro de conexão com a IA. Tente novamente.";
+        try {
+          const err = await response.json();
+          if (err?.error) message = err.error;
+        } catch {
+          message = (await response.text()) || message;
+        }
+        throw new Error(message);
       }
 
       const data = await response.json();
@@ -57,9 +63,9 @@ export function AIGiftAssistant({ weddingSlug, onGiftAdded, onClose }: { wedding
 
       setMessages((prev) => [...prev, assistantMessage]);
       onGiftAdded();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      setMessages((prev) => [...prev, { id: Date.now().toString(), role: "assistant", content: "Oops, ocorreu um erro. Tente novamente." }]);
+      setMessages((prev) => [...prev, { id: Date.now().toString(), role: "assistant", content: `Erro de conexão com a IA: ${error?.message || "tente novamente."}` }]);
     } finally {
       setIsLoading(false);
     }
@@ -81,7 +87,7 @@ export function AIGiftAssistant({ weddingSlug, onGiftAdded, onClose }: { wedding
           </div>
           <div className="flex flex-col items-start gap-0">
             <h3 className="font-semibold text-md text-foreground leading-none mb-1">IA Concierge</h3>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Gemini 3.6 Flash</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Gemini 2.5 Flash</p>
           </div>
         </div>
         {onClose && (

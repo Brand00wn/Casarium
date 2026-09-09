@@ -1,9 +1,9 @@
 // @ts-nocheck
-import { google } from "@ai-sdk/google";
 import { generateObject } from "ai";
 import { z } from "zod";
 import * as cheerio from "cheerio";
 import { prisma } from "@/lib/prisma";
+import { getGoogleModel, toAiErrorMessage } from "@/lib/ai-model";
 
 export async function POST(req: Request) {
   try {
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     const categoriesString = categories.map(c => `'${c.id}' (${c.name})`).join(", ");
 
     const result = await generateObject({
-      model: google("gemini-3.5-flash"),
+      model: getGoogleModel(),
       system: `Você é um Concierge de Lista de Presentes experiente.
 Seu objetivo é ajudar os noivos a cadastrarem presentes na lista deles.
 Os noivos vão te mandar links de lojas (Mercado Livre, Amazon, Magalu, etc.).
@@ -156,6 +156,6 @@ Sempre responda ao usuário em 'responseText' sendo extremamente educado, confir
     });
   } catch (error: any) {
     console.error("AI Route Error:", error);
-    return new Response(error.message, { status: 500 });
+    return Response.json({ error: toAiErrorMessage(error) }, { status: 500 });
   }
 }
