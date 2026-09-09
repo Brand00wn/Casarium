@@ -6,6 +6,8 @@ import { revalidatePath } from "next/cache"
 import { MemberRole, Role } from "@prisma/client"
 import { DEFAULT_GIFTS } from "@/lib/default-gifts"
 import { findAvailableSlug, generateWeddingSlug, slugify } from "@/lib/slug"
+import { resend } from "@/lib/resend"
+import { CoupleInviteEmail } from "@/components/emails/couple-invite-email"
 
 export async function createWedding(data: {
   slug?: string
@@ -63,18 +65,44 @@ export async function createWedding(data: {
       // For now, we just find existing or create dummy without password.
       // A better flow sends an email invitation with a setup link.
       let couple = await prisma.user.findUnique({ where: { email: data.coupleEmail } })
+      let tempPassword = ""
+      
       if (!couple) {
-        // Fallback for demo: create a dummy user
+        // Generate a random temporary password
+        tempPassword = Math.random().toString(36).slice(-8)
         const bcrypt = require('bcryptjs')
-        const defaultPassword = await bcrypt.hash('ConciWedding@2026', 10)
+        const passwordHash = await bcrypt.hash(tempPassword, 10)
+        
         couple = await prisma.user.create({
           data: {
             email: data.coupleEmail,
             name: data.coupleName || `${data.partner1Name} & ${data.partner2Name}`,
-            passwordHash: defaultPassword,
+            passwordHash,
             role: Role.COUPLE
           }
         })
+
+        // Send email invitation if RESEND_API_KEY is configured
+        if (process.env.RESEND_API_KEY) {
+          try {
+            const siteUrl = process.env.NEXTAUTH_URL || process.env.UPLOADTHING_URL || "http://localhost:3000"
+            await resend.emails.send({
+              from: "ConciWedding <onboarding@resend.dev>",
+              to: data.coupleEmail,
+              subject: "Você foi convidado para gerenciar seu casamento! 💍",
+              react: CoupleInviteEmail({
+                coupleName: couple.name || "Noivos",
+                plannerName: user.name || "Seu cerimonialista",
+                weddingSlug: finalSlug,
+                loginEmail: couple.email,
+                tempPassword,
+                siteUrl,
+              }),
+            })
+          } catch (emailError) {
+            console.error("Failed to send invite email:", emailError)
+          }
+        }
       }
 
       await prisma.weddingMember.create({
