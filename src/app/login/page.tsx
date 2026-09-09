@@ -92,7 +92,7 @@ export default function LoginPage() {
                 <Label htmlFor="password" className="text-sm font-semibold text-foreground">
                   Senha
                 </Label>
-                <Link href="#" className="text-xs font-medium text-primary hover:text-primary/80 transition-colors">
+                <Link href="/forgot-password" className="text-xs font-medium text-primary hover:text-primary/80 transition-colors">
                   Esqueceu a senha?
                 </Link>
               </div>
