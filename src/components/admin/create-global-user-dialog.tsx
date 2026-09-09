@@ -79,7 +79,7 @@ export function CreateGlobalUserDialog({ planners, weddings }: { planners: any[]
   const handleCopy = () => {
     if (successData?.password) {
       navigator.clipboard.writeText(
-        `Olá ${successData.name}!\n\nSua conta de ${successData.roleName} no ConciWedding foi criada.\n\nAcesso: ${successData.email}\nSenha provisória: ${successData.password}\n\nFaça login para começar!`
+        `Olá ${successData.name}!\n\nSua conta de ${successData.roleName} no Casarium foi criada.\n\nAcesso: ${successData.email}\nSenha provisória: ${successData.password}\n\nFaça login para começar!`
       )
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)

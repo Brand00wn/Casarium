@@ -45,7 +45,7 @@ export default async function SiteLayout({
       </main>
       <footer className="py-8 text-center text-sm text-muted-foreground border-t">
         <p>© {new Date().getFullYear()} {wedding.partner1Name} & {wedding.partner2Name}. Todos os direitos reservados.</p>
-        <p className="mt-1 text-xs">Criado com ConciWedding</p>
+        <p className="mt-1 text-xs">Criado com Casarium</p>
       </footer>
     </div>
   )

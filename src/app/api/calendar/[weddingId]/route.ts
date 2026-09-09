@@ -29,7 +29,7 @@ export async function GET(
 
     const calendar = ical({
       name: `Casamento de ${wedding.partner1Name} e ${wedding.partner2Name}`,
-      description: `Agenda oficial do casamento de ${wedding.partner1Name} e ${wedding.partner2Name}. Gerado por ConciWedding.`,
+      description: `Agenda oficial do casamento de ${wedding.partner1Name} e ${wedding.partner2Name}. Gerado por Casarium.`,
       timezone: 'America/Sao_Paulo', // Defaulting to BRT for now
     })
 

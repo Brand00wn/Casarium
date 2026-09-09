@@ -28,8 +28,8 @@ export async function GET(request: Request) {
   const workbook = new ExcelJS.Workbook()
   
   // Metadados
-  workbook.creator = "ConciWedding"
-  workbook.lastModifiedBy = "ConciWedding"
+  workbook.creator = "Casarium"
+  workbook.lastModifiedBy = "Casarium"
   workbook.created = new Date()
 
   // Criar Aba
@@ -144,7 +144,7 @@ export async function GET(request: Request) {
 
   return new NextResponse(buffer, {
     headers: {
-      "Content-Disposition": `attachment; filename="ConciWedding - Lista de Convidados.xlsx"`,
+      "Content-Disposition": `attachment; filename="Casarium - Lista de Convidados.xlsx"`,
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     },
   })

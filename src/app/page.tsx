@@ -23,7 +23,7 @@ export default async function Home() {
   if (memberships.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen text-center p-4">
-        <h1 className="text-3xl font-bold mb-4 text-primary">Bem-vindo(a) ao ConciWedding!</h1>
+        <h1 className="text-3xl font-bold mb-4 text-primary">Bem-vindo(a) ao Casarium!</h1>
         <p className="text-muted-foreground max-w-md">
           O seu casamento ainda não foi configurado no sistema. Aguarde a criação ou o convite pelo seu cerimonialista ou administrador.
         </p>

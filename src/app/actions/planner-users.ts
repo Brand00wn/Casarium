@@ -85,9 +85,9 @@ export async function createCoupleAccount(data: {
         const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
         
         await resend.emails.send({
-          from: "ConciWedding <onboarding@resend.dev>",
+          from: "Casarium <onboarding@resend.dev>",
           to: [data.email],
-          subject: "Seu Painel de Casamento foi criado! - ConciWedding",
+          subject: "Seu Painel de Casamento foi criado! - Casarium",
           react: CoupleInviteEmail({
             coupleName: data.coupleName,
             plannerName: currentUser.name || "Seu Cerimonialista",

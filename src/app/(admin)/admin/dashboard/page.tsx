@@ -18,7 +18,7 @@ export default async function AdminDashboardPage() {
       <div>
         <h1 className="text-4xl font-bold tracking-tight text-foreground/90">Dashboard</h1>
         <p className="text-muted-foreground mt-2 text-lg font-light">
-          Visão geral do sistema ConciWedding.
+          Visão geral do sistema Casarium.
         </p>
       </div>
 

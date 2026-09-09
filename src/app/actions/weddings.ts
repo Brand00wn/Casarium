@@ -87,7 +87,7 @@ export async function createWedding(data: {
           try {
             const siteUrl = process.env.NEXTAUTH_URL || process.env.UPLOADTHING_URL || "http://localhost:3000"
             await resend.emails.send({
-              from: "ConciWedding <onboarding@resend.dev>",
+              from: "Casarium <onboarding@resend.dev>",
               to: data.coupleEmail,
               subject: "Você foi convidado para gerenciar seu casamento! 💍",
               react: CoupleInviteEmail({

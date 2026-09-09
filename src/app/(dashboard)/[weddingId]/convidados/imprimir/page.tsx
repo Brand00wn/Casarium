@@ -148,7 +148,7 @@ export default async function PrintGuestsPage({
         </table>
         
         <div className="mt-12 pt-4 border-t text-center text-xs text-gray-400 print:block">
-          Lista gerada pela plataforma ConciWedding em {new Date().toLocaleDateString("pt-BR")}
+          Lista gerada pela plataforma Casarium em {new Date().toLocaleDateString("pt-BR")}
         </div>
       </div>
     </div>

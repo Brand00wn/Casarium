@@ -37,11 +37,11 @@ export const CoupleInviteEmail = ({
       <Preview>Seu painel de casamento foi criado!</Preview>
       <Body style={main}>
         <Container style={container}>
-          <Heading style={h1}>Bem-vindos ao ConciWedding!</Heading>
+          <Heading style={h1}>Bem-vindos ao Casarium!</Heading>
           
           <Text style={text}>Olá, {coupleName}!</Text>
           <Text style={text}>
-            O seu cerimonialista, <strong>{plannerName}</strong>, acabou de configurar o painel do seu casamento.
+            O seu cerimonial <strong>{plannerName}</strong> acabou de configurar o painel do seu casamento.
             Agora vocês podem acompanhar a lista de convidados, confirmações de presença, presentes e muito mais.
           </Text>
 
@@ -65,7 +65,7 @@ export const CoupleInviteEmail = ({
           <Hr style={hr} />
           <Text style={footer}>
             Se você tiver alguma dúvida, entre em contato com {plannerName}.<br />
-            ConciWedding - O melhor sistema de gestão de casamentos.
+            Casarium - O melhor sistema de gestão de casamentos.
           </Text>
         </Container>
       </Body>
