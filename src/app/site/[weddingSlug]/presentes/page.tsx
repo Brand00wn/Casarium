@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getSiteGuestBySlug } from "@/lib/site-guest";
 import { notFound } from "next/navigation";
 import GiftGrid from "./GiftGrid";
 
@@ -21,6 +22,8 @@ export default async function GiftsSitePage({
     orderBy: { createdAt: "desc" },
   });
 
+  const siteGuest = await getSiteGuestBySlug(weddingSlug);
+
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
@@ -38,7 +41,12 @@ export default async function GiftsSitePage({
             A lista de presentes ainda não foi montada.
           </div>
         ) : (
-          <GiftGrid gifts={gifts} weddingId={wedding.id} />
+          <GiftGrid
+        gifts={gifts}
+        weddingId={wedding.id}
+        weddingSlug={wedding.slug}
+        siteGuest={siteGuest ? { id: siteGuest.id, name: siteGuest.name } : null}
+      />
         )}
       </div>
     </div>

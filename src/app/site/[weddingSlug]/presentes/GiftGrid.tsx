@@ -21,9 +21,13 @@ import { QrCode, CreditCard, Gift as GiftIcon } from "lucide-react";
 export default function GiftGrid({
   gifts,
   weddingId,
+  weddingSlug,
+  siteGuest,
 }: {
   gifts: Gift[];
   weddingId: string;
+  weddingSlug: string;
+  siteGuest?: { id: string, name: string } | null;
 }) {
   const [selectedGift, setSelectedGift] = useState<Gift | null>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -35,7 +39,7 @@ export default function GiftGrid({
 
   const openCheckout = (gift: Gift) => {
     setSelectedGift(gift);
-    setGuestName("");
+    setGuestName(siteGuest?.name || "");
     setGuestMessage("");
     setPaymentMethod("PIX");
     setIsOpen(true);
@@ -59,11 +63,12 @@ export default function GiftGrid({
 
     setIsSubmitting(true);
     try {
-      await simulateCheckout(weddingId, selectedGift?.id || null, {
+      await simulateCheckout(weddingSlug, selectedGift?.id || null, {
         guestName,
         guestMessage,
         amount: selectedGift!.price,
         paymentMethod,
+        ...(siteGuest ? { guestId: siteGuest.id } : {}),
       });
       toast.success("Pagamento realizado com sucesso! Muito obrigado pelo presente.");
       setIsOpen(false);

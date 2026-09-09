@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
-import { useParams, useRouter } from "next/navigation"
-import { searchGuest, submitRsvp } from "@/app/actions/rsvp"
+import { useEffect, useState } from "react"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
+import { searchGuest, submitRsvp, validateInviteToken, identifySiteGuest } from "@/app/actions/rsvp"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,57 +10,111 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 
+type Candidate = { id: string, name: string, familyCount: number }
+
 export default function RsvpPage() {
   const params = useParams()
   const slug = params.weddingSlug as string
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   const [step, setStep] = useState(1)
   const [query, setQuery] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
-  
+
+  const [candidates, setCandidates] = useState<Candidate[]>([])
+  const [selected, setSelected] = useState<Candidate | null>(null)
+  const [token, setToken] = useState("")
+
   const [guest, setGuest] = useState<any>(null)
   const [rsvpEvents, setRsvpEvents] = useState<any[]>([])
   const [familyUpdates, setFamilyUpdates] = useState<any[]>([])
+
+  const openInvite = (full: any, inviteToken: string) => {
+    setGuest(full.guest)
+    setRsvpEvents(full.rsvpEvents || [])
+    const allGuests = full.guest.family?.guests || [full.guest]
+    setFamilyUpdates(allGuests.map((g: any) => {
+      const eventRsvps = (full.rsvpEvents || []).map((ev: any) => {
+        const existingRsvp = ev.eventGuests?.find((eg: any) => eg.guestId === g.id)
+        return {
+          eventId: ev.id,
+          title: ev.title,
+          rsvpStatus: existingRsvp ? existingRsvp.rsvpStatus : 'CONFIRMED' // default to confirmed
+        }
+      })
+
+      return {
+        id: g.id,
+        name: g.name,
+        rsvpStatus: g.rsvpStatus === 'PENDING' ? 'CONFIRMED' : g.rsvpStatus, // Default check
+        dietaryRestrictions: g.dietaryRestrictions || [],
+        notes: g.notes || "",
+        eventRsvps
+      }
+    }))
+    // Identifica o convidado no site (pré-preenche nome nos presentes, recados, etc.)
+    identifySiteGuest(slug, inviteToken).catch(() => {})
+    setStep(3)
+  }
+
+  // Deep-link do WhatsApp: /rsvp?token=XXXX
+  useEffect(() => {
+    const t = searchParams.get("token")
+    if (!t) return
+    setLoading(true)
+    // Busca direta pelo código para descobrir o convite e validar
+    searchGuest(slug, t).then(async (found: any) => {
+      if (found?.type === "invite" && found.guest) {
+        const res = await validateInviteToken(slug, found.guest.id, t)
+        if (res.success) openInvite(res, res.token)
+        else setError(res.error || "Código inválido.")
+      } else {
+        setError("Código do convite não encontrado neste casamento.")
+      }
+    }).catch(() => setError("Erro ao abrir convite.")).finally(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug])
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError("")
     try {
-      const found = await searchGuest(slug, query)
-      if (found && found.guest) {
-        setGuest(found.guest)
-        setRsvpEvents(found.rsvpEvents || [])
-        // Initialize family updates
-        const allGuests = found.guest.family?.guests || [found.guest]
-        setFamilyUpdates(allGuests.map((g: any) => {
-          // Initialize sub-events
-          const eventRsvps = (found.rsvpEvents || []).map((ev: any) => {
-            const existingRsvp = ev.eventGuests?.find((eg: any) => eg.guestId === g.id)
-            return {
-              eventId: ev.id,
-              title: ev.title,
-              rsvpStatus: existingRsvp ? existingRsvp.rsvpStatus : 'CONFIRMED' // default to confirmed
-            }
-          })
-
-          return {
-            id: g.id,
-            name: g.name,
-            rsvpStatus: g.rsvpStatus === 'PENDING' ? 'CONFIRMED' : g.rsvpStatus, // Default check
-            dietaryRestrictions: g.dietaryRestrictions || [],
-            notes: g.notes || "",
-            eventRsvps
-          }
-        }))
+      const found: any = await searchGuest(slug, query)
+      if (found?.type === "invite" && found.guest) {
+        // Código exato: pede o token para confirmar que é o dono do convite
+        setCandidates([{ id: found.guest.id, name: found.guest.name, familyCount: found.guest.family?.guests?.length || 1 }])
+        setSelected({ id: found.guest.id, name: found.guest.name, familyCount: found.guest.family?.guests?.length || 1 })
+        setStep(2)
+      } else if (found?.type === "candidates" && found.candidates.length > 0) {
+        setCandidates(found.candidates)
         setStep(2)
       } else {
-        setError("Convite não encontrado. Tente buscar pelo nome exato, email ou código do convite (token).")
+        setError("Nenhum convite encontrado. Tente parte do nome ou use o código do convite enviado no WhatsApp.")
       }
     } catch (err: any) {
       setError(err.message || "Erro ao buscar convite.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleValidateToken = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selected) return
+    setLoading(true)
+    setError("")
+    try {
+      const res = await validateInviteToken(slug, selected.id, token)
+      if (res.success) {
+        openInvite(res, res.token)
+      } else {
+        setError(res.error || "Código inválido.")
+      }
+    } catch (err: any) {
+      setError(err.message || "Erro ao validar código.")
     } finally {
       setLoading(false)
     }
@@ -70,9 +124,9 @@ export default function RsvpPage() {
     setLoading(true)
     try {
       await submitRsvp(slug, familyUpdates)
-      setStep(3)
-    } catch (err) {
-      alert("Erro ao salvar confirmação. Tente novamente.")
+      setStep(4)
+    } catch (err: any) {
+      alert(err.message || "Erro ao salvar confirmação. Tente novamente.")
     } finally {
       setLoading(false)
     }
@@ -85,7 +139,7 @@ export default function RsvpPage() {
   const updateEventRsvp = (memberId: string, eventId: string, checked: boolean) => {
     setFamilyUpdates(prev => prev.map(m => {
       if (m.id !== memberId) return m
-      const newEventRsvps = m.eventRsvps.map((ev: any) => 
+      const newEventRsvps = m.eventRsvps.map((ev: any) =>
         ev.eventId === eventId ? { ...ev, rsvpStatus: checked ? 'CONFIRMED' : 'DECLINED' } : ev
       )
       return { ...m, eventRsvps: newEventRsvps }
@@ -95,21 +149,21 @@ export default function RsvpPage() {
   return (
     <div className="flex-1 flex items-center justify-center p-4 py-12 relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 via-background to-secondary/10 -z-10" />
-      
+
       <div className="w-full max-w-2xl">
         {step === 1 && (
           <Card className="bg-white/60 backdrop-blur-xl border-white/40 shadow-2xl">
             <CardHeader className="text-center pb-8">
               <CardTitle className="text-4xl font-serif text-primary">Confirme sua Presença</CardTitle>
               <CardDescription className="text-lg">
-                Digite seu email, nome completo ou o código do seu convite para acessá-lo.
+                Digite parte do seu nome ou o código do convite que você recebeu no WhatsApp.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSearch} className="space-y-6">
                 <div className="space-y-2">
-                  <Input 
-                    placeholder="Ex: joao@email.com, João Silva ou ABCD12" 
+                  <Input
+                    placeholder="Ex: João ou ABCD1234"
                     value={query}
                     onChange={e => setQuery(e.target.value)}
                     className="h-14 text-lg bg-white/50 border-white/50"
@@ -126,6 +180,53 @@ export default function RsvpPage() {
 
         {step === 2 && (
           <Card className="bg-white/60 backdrop-blur-xl border-white/40 shadow-2xl">
+            <CardHeader className="text-center pb-6">
+              <CardTitle className="text-3xl font-serif text-primary">Encontrou você?</CardTitle>
+              <CardDescription>
+                Selecione seu convite e digite o código recebido no WhatsApp para confirmar que é você.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                {candidates.map(c => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => { setSelected(c); setError("") }}
+                    className={`w-full text-left p-4 rounded-xl border transition-all ${selected?.id === c.id ? 'border-primary bg-primary/5 shadow-sm' : 'bg-white/40 hover:border-primary/40'}`}
+                  >
+                    <p className="font-semibold text-lg">{c.name}</p>
+                    <p className="text-sm text-muted-foreground">Convite para {c.familyCount} {c.familyCount === 1 ? 'pessoa' : 'pessoas'}</p>
+                  </button>
+                ))}
+              </div>
+
+              <form onSubmit={handleValidateToken} className="space-y-4 pt-2">
+                <div className="space-y-2">
+                  <Label htmlFor="token">Código do convite</Label>
+                  <Input
+                    id="token"
+                    placeholder="Ex: ABCD1234"
+                    value={token}
+                    onChange={e => setToken(e.target.value.toUpperCase())}
+                    className="h-14 text-lg tracking-widest text-center uppercase bg-white/50"
+                    maxLength={12}
+                  />
+                  {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+                </div>
+                <div className="flex gap-4">
+                  <Button type="button" variant="outline" onClick={() => { setStep(1); setSelected(null); setToken(""); setError("") }} className="flex-1 h-14">Voltar</Button>
+                  <Button type="submit" disabled={loading || !selected || !token.trim()} className="flex-1 h-14">
+                    {loading ? "Validando..." : "Acessar Convite"}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        )}
+
+        {step === 3 && (
+          <Card className="bg-white/60 backdrop-blur-xl border-white/40 shadow-2xl">
             <CardHeader className="text-center pb-8">
               <CardTitle className="text-3xl font-serif text-primary">Olá, {guest.name}!</CardTitle>
               <CardDescription>
@@ -137,7 +238,7 @@ export default function RsvpPage() {
                 <div key={member.id} className="p-6 bg-white/40 rounded-2xl border border-white/50 shadow-sm space-y-6">
                   <div>
                     <Label className="text-xl font-medium block mb-4">{member.name}</Label>
-                    
+
                     <div className="space-y-3 bg-white/30 p-4 rounded-lg">
                       {/* Main Wedding RSVP */}
                       <div className="flex items-center justify-between">
@@ -146,7 +247,7 @@ export default function RsvpPage() {
                           <span className={member.rsvpStatus === 'CONFIRMED' ? "text-primary font-medium text-sm" : "text-muted-foreground text-sm"}>
                             {member.rsvpStatus === 'CONFIRMED' ? "Confirmado" : "Não irá"}
                           </span>
-                          <Switch 
+                          <Switch
                             checked={member.rsvpStatus === 'CONFIRMED'}
                             onCheckedChange={(checked) => updateMember(member.id, 'rsvpStatus', checked ? 'CONFIRMED' : 'DECLINED')}
                           />
@@ -161,7 +262,7 @@ export default function RsvpPage() {
                             <span className={ev.rsvpStatus === 'CONFIRMED' ? "text-primary font-medium text-sm" : "text-muted-foreground text-sm"}>
                               {ev.rsvpStatus === 'CONFIRMED' ? "Confirmado" : "Não irá"}
                             </span>
-                            <Switch 
+                            <Switch
                               checked={ev.rsvpStatus === 'CONFIRMED'}
                               onCheckedChange={(checked) => updateEventRsvp(member.id, ev.eventId, checked)}
                             />
@@ -170,13 +271,13 @@ export default function RsvpPage() {
                       ))}
                     </div>
                   </div>
-                  
+
                   {(member.rsvpStatus === 'CONFIRMED' || (member.eventRsvps && member.eventRsvps.some((ev:any) => ev.rsvpStatus === 'CONFIRMED'))) && (
                     <div className="space-y-4 pt-4 border-t border-white/30">
                       <div className="space-y-2">
                         <Label>Restrições Alimentares?</Label>
-                        <Input 
-                          placeholder="Ex: Vegano, Alergia a amendoim (deixe em branco se não houver)" 
+                        <Input
+                          placeholder="Ex: Vegano, Alergia a amendoim (deixe em branco se não houver)"
                           value={member.dietaryRestrictions.join(', ')}
                           onChange={e => updateMember(member.id, 'dietaryRestrictions', e.target.value ? e.target.value.split(',').map(s => s.trim()) : [])}
                           className="bg-white/50"
@@ -184,8 +285,8 @@ export default function RsvpPage() {
                       </div>
                       <div className="space-y-2">
                         <Label>Alguma observação?</Label>
-                        <Textarea 
-                          placeholder="Cadeira de rodas, bebê de colo, etc." 
+                        <Textarea
+                          placeholder="Cadeira de rodas, bebê de colo, etc."
                           value={member.notes}
                           onChange={e => updateMember(member.id, 'notes', e.target.value)}
                           className="bg-white/50"
@@ -195,7 +296,7 @@ export default function RsvpPage() {
                   )}
                 </div>
               ))}
-              
+
               <div className="flex gap-4 pt-4">
                 <Button variant="outline" onClick={() => setStep(1)} className="flex-1 h-14">Voltar</Button>
                 <Button onClick={handleSubmit} disabled={loading} className="flex-1 h-14">
@@ -206,7 +307,7 @@ export default function RsvpPage() {
           </Card>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <Card className="bg-white/60 backdrop-blur-xl border-white/40 shadow-2xl text-center py-12">
             <CardContent className="space-y-6">
               <div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">

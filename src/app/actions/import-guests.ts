@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { getCurrentUser } from "@/lib/session"
+import { generateGuestToken } from "@/lib/guest-code"
 
 function normalizeString(str: string): string {
   if (!str) return ""
@@ -91,6 +92,7 @@ export async function importGuests(weddingId: string, guestsData: any[]) {
 
         const notes = row["Idade (Adulto/Criança/Bebê)"] ? `Idade: ${row["Idade (Adulto/Criança/Bebê)"]}` : null
 
+        const code = generateGuestToken()
         const guest = await prisma.guest.create({
           data: {
             weddingId: wedding.id,
@@ -99,8 +101,8 @@ export async function importGuests(weddingId: string, guestsData: any[]) {
             name: rawName,
             phone: phone || null,
             isPrimary,
-            qrCode: crypto.randomUUID(),
-            token: crypto.randomUUID(),
+            qrCode: code,
+            token: code,
             notes
           }
         })

@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma"
+import { getSiteGuestBySlug } from "@/lib/site-guest"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { SiteGuestBadge } from "./site-guest-badge"
 
 export default async function SiteLayout({
   children,
@@ -16,6 +18,8 @@ export default async function SiteLayout({
   if (!wedding) {
     notFound()
   }
+
+  const siteGuest = await getSiteGuestBySlug(wedding.slug)
 
   return (
     <div className="min-h-screen bg-background flex flex-col font-sans text-foreground">
@@ -37,6 +41,9 @@ export default async function SiteLayout({
             <Link href={`/site/${wedding.slug}/presentes`} className="hover:text-primary transition-colors">
               Lista de Presentes
             </Link>
+            {siteGuest && (
+              <SiteGuestBadge guestName={siteGuest.name} weddingSlug={wedding.slug} />
+            )}
           </nav>
         </div>
       </header>

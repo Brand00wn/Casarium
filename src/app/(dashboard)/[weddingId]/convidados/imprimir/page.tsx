@@ -1,5 +1,6 @@
 import React from "react"
 import { prisma } from "@/lib/prisma"
+import { guestCodeQrDataUrl } from "@/lib/guest-qr"
 import { PrintButton } from "./print-button"
 
 export default async function PrintGuestsPage({
@@ -51,6 +52,14 @@ export default async function PrintGuestsPage({
   const totalGuests = guests.length;
   const confirmedCount = guests.filter(g => g.rsvpStatus === "CONFIRMED").length;
 
+  // QR de entrada por titular (QR carrega o token do convite)
+  const qrByGuestId = new Map<string, string>();
+  for (const g of guests) {
+    if (g.isPrimary && g.token) {
+      qrByGuestId.set(g.id, await guestCodeQrDataUrl(g.token));
+    }
+  }
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-muted/20 p-8 print:p-0 print:bg-white">
       <div className="w-full max-w-4xl flex justify-between items-center mb-6 print:hidden">
@@ -80,6 +89,7 @@ export default async function PrintGuestsPage({
               <th className="pb-3 px-2 font-bold w-16 text-center">Status</th>
               <th className="pb-3 px-2 font-bold">Convidado / Família</th>
               <th className="pb-3 px-2 font-bold w-32">Grupo/Lado</th>
+              <th className="pb-3 px-2 font-bold w-24 text-center">QR Entrada</th>
               <th className="pb-3 px-2 font-bold w-24 text-center">Check-in</th>
             </tr>
           </thead>
@@ -109,6 +119,17 @@ export default async function PrintGuestsPage({
                     <td className="py-3 px-2 text-gray-600 text-xs">
                       {primary.group?.name || "-"}
                     </td>
+                    <td className="py-3 px-2 text-center align-middle">
+                      {qrByGuestId.get(primary.id) ? (
+                        <div className="flex flex-col items-center gap-1">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={qrByGuestId.get(primary.id)} alt={`QR de ${primary.name}`} className="w-16 h-16" />
+                          <span className="text-[10px] font-mono text-gray-500">{primary.token}</span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-300 text-xs">-</span>
+                      )}
+                    </td>
                     <td className="py-3 px-2 text-center">
                       <div className="w-5 h-5 border-2 border-gray-300 rounded-sm mx-auto"></div>
                     </td>
@@ -136,6 +157,7 @@ export default async function PrintGuestsPage({
                       <td className="py-2 px-2 text-gray-500 text-xs italic">
                         Acompanhante
                       </td>
+                      <td className="py-2 px-2 text-center"></td>
                       <td className="py-2 px-2 text-center">
                         <div className="w-5 h-5 border-2 border-gray-300 rounded-sm mx-auto"></div>
                       </td>

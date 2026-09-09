@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { requirePermission } from "@/lib/session"
+import { generateGuestToken } from "@/lib/guest-code"
 import { type GuestFormValues } from "@/lib/validations/guest"
 
 export async function createGuest(weddingId: string, data: GuestFormValues) {
@@ -30,7 +31,8 @@ export async function createGuest(weddingId: string, data: GuestFormValues) {
         }
       })
 
-      // 1. Cria o Titular
+      // 1. Cria o Titular (token único = QR de entrada)
+      const titularCode = generateGuestToken()
       const titular = await tx.guest.create({
         data: {
           weddingId: wedding.id,
@@ -42,8 +44,8 @@ export async function createGuest(weddingId: string, data: GuestFormValues) {
           rsvpStatus: data.rsvpStatus,
           dietaryRestrictions: restrictionsArray,
           notes: data.ageCategory ? `Idade: ${data.ageCategory}` : null,
-          token: Math.random().toString(36).substring(2, 8).toUpperCase(),
-          qrCode: `qr-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
+          token: titularCode,
+          qrCode: titularCode
         }
       })
 
@@ -56,20 +58,23 @@ export async function createGuest(weddingId: string, data: GuestFormValues) {
       // 3. Cria os Acompanhantes (Dependentes)
       if (data.companions && data.companions.length > 0) {
         await tx.guest.createMany({
-          data: data.companions.map(comp => ({
-            weddingId: wedding.id,
-            familyId: family.id,
-            isPrimary: false,
-            name: comp.name,
-            phone: comp.phone || null,
-            dietaryRestrictions: comp.dietaryRestrictions
-              ? comp.dietaryRestrictions.split(",").map(s => s.trim()).filter(Boolean)
-              : [],
-            notes: comp.ageCategory ? `Idade: ${comp.ageCategory}` : null,
-            rsvpStatus: data.rsvpStatus, // Herda status inicial do titular
-            token: Math.random().toString(36).substring(2, 8).toUpperCase(),
-            qrCode: `qr-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
-          }))
+          data: data.companions.map(comp => {
+            const code = generateGuestToken()
+            return {
+              weddingId: wedding.id,
+              familyId: family.id,
+              isPrimary: false,
+              name: comp.name,
+              phone: comp.phone || null,
+              dietaryRestrictions: comp.dietaryRestrictions
+                ? comp.dietaryRestrictions.split(",").map(s => s.trim()).filter(Boolean)
+                : [],
+              notes: comp.ageCategory ? `Idade: ${comp.ageCategory}` : null,
+              rsvpStatus: data.rsvpStatus, // Herda status inicial do titular
+              token: code,
+              qrCode: code
+            }
+          })
         })
       }
     })
@@ -143,6 +148,7 @@ export async function importGuests(weddingId: string, data: BatchGuestData[]) {
           ? row.dietaryRestrictions.split(",").map(s => s.trim()).filter(Boolean) 
           : []
 
+        const titularCode = generateGuestToken()
         const titular = await tx.guest.create({
           data: {
             weddingId: wedding.id,
@@ -152,8 +158,8 @@ export async function importGuests(weddingId: string, data: BatchGuestData[]) {
             email: row.email || null,
             phone: row.phone || null,
             dietaryRestrictions: restrictions,
-            token: Math.random().toString(36).substring(2, 8).toUpperCase(),
-            qrCode: `qr-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
+            token: titularCode,
+            qrCode: titularCode
           }
         })
 
@@ -166,14 +172,17 @@ export async function importGuests(weddingId: string, data: BatchGuestData[]) {
           const comps = row.companions.split(",").map(c => c.trim()).filter(Boolean)
           if (comps.length > 0) {
             await tx.guest.createMany({
-              data: comps.map(c => ({
-                weddingId: wedding.id,
-                familyId: family.id,
-                isPrimary: false,
-                name: c,
-                token: Math.random().toString(36).substring(2, 8).toUpperCase(),
-                qrCode: `qr-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
-              }))
+              data: comps.map(c => {
+                const code = generateGuestToken()
+                return {
+                  weddingId: wedding.id,
+                  familyId: family.id,
+                  isPrimary: false,
+                  name: c,
+                  token: code,
+                  qrCode: code
+                }
+              })
             })
           }
         }
@@ -239,17 +248,20 @@ export async function updateGuest(weddingSlug: string, guestId: string, data: an
       
       if (data.companions && data.companions.length > 0) {
         await tx.guest.createMany({
-          data: data.companions.map((comp: any) => ({
-            weddingId: existingGuest.weddingId,
-            familyId: familyIdToUse,
-            name: comp.name,
-            phone: comp.phone || null,
-            dietaryRestrictions: comp.dietaryRestrictions ? comp.dietaryRestrictions.split(",").map((s: string) => s.trim()).filter(Boolean) : [],
-            notes: comp.ageCategory ? `Idade: ${comp.ageCategory}` : null,
-            isPrimary: false,
-            token: Math.random().toString(36).substring(2, 8).toUpperCase(),
-            qrCode: `qr-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
-          }))
+          data: data.companions.map((comp: any) => {
+            const code = generateGuestToken()
+            return {
+              weddingId: existingGuest.weddingId,
+              familyId: familyIdToUse,
+              name: comp.name,
+              phone: comp.phone || null,
+              dietaryRestrictions: comp.dietaryRestrictions ? comp.dietaryRestrictions.split(",").map((s: string) => s.trim()).filter(Boolean) : [],
+              notes: comp.ageCategory ? `Idade: ${comp.ageCategory}` : null,
+              isPrimary: false,
+              token: code,
+              qrCode: code
+            }
+          })
         })
       }
     })

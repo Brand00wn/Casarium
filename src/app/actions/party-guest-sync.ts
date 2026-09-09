@@ -1,6 +1,7 @@
 "use server"
 
 import { prisma } from "@/lib/prisma"
+import { generateGuestToken } from "@/lib/guest-code"
 
 export type SyncResult = 
   | { action: "skipped", reason: string }
@@ -38,14 +39,15 @@ export async function syncPartyMemberToGuest(weddingId: string, memberName: stri
       }
     })
 
+    const code = generateGuestToken()
     const newGuest = await prisma.guest.create({
       data: {
         weddingId,
         name: cleanName,
         familyId: family.id,
         isPrimary: true,
-        qrCode: crypto.randomUUID(),
-        token: crypto.randomUUID(),
+        qrCode: code,
+        token: code,
         partyMember: {
           connect: { id: memberId }
         }

@@ -160,7 +160,8 @@ export async function getTransactions(weddingSlug: string) {
   });
 }
 
-export async function simulateCheckout(weddingSlug: string, giftId: string | null, data: { amount: number; paymentMethod: "PIX" | "CREDIT_CARD"; guestName: string; guestMessage?: string }) {
+export async function simulateCheckout(weddingSlug: string, giftId: string | null,
+data: { amount: number; paymentMethod: "PIX" | "CREDIT_CARD"; guestName: string; guestMessage?: string; guestId?: string }) {
   const transaction = await prisma.transaction.create({
     data: {
       amount: data.amount,
@@ -170,6 +171,7 @@ export async function simulateCheckout(weddingSlug: string, giftId: string | nul
       guestMessage: data.guestMessage,
       wedding: { connect: { slug: weddingSlug } },
       ...(giftId && { gift: { connect: { id: giftId } } }),
+      ...(data.guestId && { guest: { connect: { id: data.guestId } } }),
     },
   });
   revalidatePath(`/${weddingSlug}/presentes`);
