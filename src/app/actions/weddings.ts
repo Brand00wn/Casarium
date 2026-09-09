@@ -7,6 +7,7 @@ import { MemberRole, Role } from "@prisma/client"
 import { DEFAULT_GIFTS } from "@/lib/default-gifts"
 import { findAvailableSlug, generateWeddingSlug, slugify } from "@/lib/slug"
 import { resend } from "@/lib/resend"
+import { getSiteUrl } from "@/lib/site-url"
 import { CoupleInviteEmail } from "@/components/emails/couple-invite-email"
 
 export async function createWedding(data: {
@@ -85,7 +86,7 @@ export async function createWedding(data: {
         // Send email invitation if RESEND_API_KEY is configured
         if (process.env.RESEND_API_KEY) {
           try {
-            const siteUrl = process.env.NEXTAUTH_URL || process.env.UPLOADTHING_URL || "http://localhost:3000"
+            const siteUrl = await getSiteUrl()
             await resend.emails.send({
               from: "Casarium <onboarding@resend.dev>",
               to: data.coupleEmail,

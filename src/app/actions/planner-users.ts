@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/session"
 import bcrypt from "bcryptjs"
 import { Resend } from "resend"
 import { CoupleInviteEmail } from "@/components/emails/couple-invite-email"
+import { getSiteUrl } from "@/lib/site-url"
 import { revalidatePath } from "next/cache"
 
 const resend = new Resend(process.env.RESEND_API_KEY || "re_placeholder")
@@ -82,7 +83,7 @@ export async function createCoupleAccount(data: {
     // Send Email if it's a new user and Resend is configured
     if (tempPassword && process.env.RESEND_API_KEY) {
       try {
-        const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+        const siteUrl = await getSiteUrl()
         
         await resend.emails.send({
           from: "Casarium <onboarding@resend.dev>",

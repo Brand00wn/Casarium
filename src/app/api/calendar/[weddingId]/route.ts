@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { getSiteUrl } from "@/lib/site-url"
 import ical from "ical-generator"
 import { EVENT_TYPE_LABELS } from "@/components/calendar/event-dialog"
 
@@ -41,7 +42,7 @@ export async function GET(
         summary: `O Grande Dia: ${wedding.partner1Name} & ${wedding.partner2Name}`,
         description: `O dia tão esperado!\nCerimônia: ${wedding.ceremonyLocation || 'A definir'}\nRecepção: ${wedding.receptionLocation || 'A definir'}`,
         location: wedding.ceremonyLocation || undefined,
-        url: `${process.env.NEXT_PUBLIC_APP_URL}/site/${wedding.slug}`,
+        url: `${await getSiteUrl()}/site/${wedding.slug}`,
       })
     }
 

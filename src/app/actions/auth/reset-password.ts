@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma"
 import { resend } from "@/lib/resend"
+import { getSiteUrl } from "@/lib/site-url"
 import crypto from "crypto"
 import bcrypt from "bcryptjs"
 import ResetPasswordEmail from "@/components/emails/reset-password-email"
@@ -30,7 +31,7 @@ export async function requestPasswordReset(email: string) {
 
     // Send the email
     if (process.env.RESEND_API_KEY) {
-      const siteUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+      const siteUrl = await getSiteUrl()
       const resetLink = `${siteUrl}/reset-password?token=${token}`
 
       await resend.emails.send({

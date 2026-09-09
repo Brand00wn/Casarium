@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { getSiteUrl } from "@/lib/site-url";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 import { WhatsAppStatus } from "@prisma/client";
 
@@ -19,7 +20,7 @@ export async function sendInvite(weddingId: string, guestId: string) {
       return { success: false, error: "Guest has no phone number" };
     }
 
-    const rsvpLink = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/site/${guest.wedding.slug}/rsvp`;
+    const rsvpLink = `${await getSiteUrl()}/site/${guest.wedding.slug}/rsvp`;
     
     const message = `Olá ${guest.name}! Você foi convidado para o casamento de ${guest.wedding.partner1Name} e ${guest.wedding.partner2Name}.
     
