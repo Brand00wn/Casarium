@@ -4,7 +4,7 @@ import { useState } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Eye, EyeOff } from "lucide-react"
+import { Eye, EyeOff, MessageCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -131,13 +131,19 @@ export default function LoginPage() {
           </form>
         </CardContent>
         
-        <CardFooter className="flex flex-col gap-4 text-center">
+        <CardFooter className="flex flex-col gap-3 text-center border-t p-6">
           <div className="text-sm text-muted-foreground">
-            Não tem uma conta?{" "}
-            <Link href="/register" className="font-semibold text-primary hover:text-primary/80 hover:underline transition-colors">
-              Crie agora
-            </Link>
+            É cerimonialista e quer usar o Casarium?
           </div>
+          <a
+            href="https://wa.me/5524988515335?text=Ol%C3%A1!%20Sou%20cerimonialista%20e%20quero%20usar%20o%20Casarium%20na%20minha%20equipe."
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 h-11 px-6 rounded-md border border-input bg-background text-sm font-semibold hover:bg-accent hover:text-accent-foreground transition-all w-full"
+          >
+            <MessageCircle className="w-4 h-4" />
+            Falar com nossa equipe
+          </a>
         </CardFooter>
       </Card>
     </div>

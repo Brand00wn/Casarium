@@ -16,9 +16,9 @@ export default auth((req) => {
   const isApiAuthRoute = pathname.startsWith('/api/auth')
   const isNextStatic = pathname.startsWith('/_next') || pathname.startsWith('/favicon.ico')
   // Rotas públicas: autenticação + site público do casamento (RSVP, presentes, mural)
+  // (auto-cadastro /register desativado — contas criadas pela equipe)
   const isPublicRoute =
     pathname.startsWith('/login') ||
-    pathname.startsWith('/register') ||
     pathname.startsWith('/forgot-password') ||
     pathname.startsWith('/reset-password') ||
     pathname.startsWith('/site')
@@ -28,8 +28,8 @@ export default auth((req) => {
   }
 
   if (isPublicRoute) {
-    // Usuário logado tentando acessar tela de auth vai para a home (que redireciona por role)
-    if (isLoggedIn && (pathname.startsWith('/login') || pathname.startsWith('/register'))) {
+    // Usuário logado tentando acessar o login vai para a home (que redireciona por role)
+    if (isLoggedIn && pathname.startsWith('/login')) {
       return Response.redirect(new URL('/', req.nextUrl))
     }
     return
