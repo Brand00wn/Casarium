@@ -179,6 +179,16 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
     return () => subscription.unsubscribe()
   }, [watch, handleSubmit])
 
+  // datetime-local devolve "AAAA-MM-DDTHH:mm" sem fuso. Converter AQUI (navegador,
+  // que conhece o fuso local) para ISO com offset — se o servidor (UTC) converter,
+  // o horário anda -3h (ex: 12h vira 9h).
+  const toIso = (v: any) => {
+    if (!v) return v;
+    if (v instanceof Date) return v.toISOString();
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? v : d.toISOString();
+  };
+
   const onSubmit = async (data: any) => {
     setIsLoading(true)
     try {
@@ -190,7 +200,10 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
         ...data,
         hasReception,
         isSameLocation,
-        date: data.ceremonyDate || wedding.date
+        ceremonyDate: toIso(data.ceremonyDate),
+        receptionDate: toIso(data.receptionDate),
+        rsvpDeadline: toIso(data.rsvpDeadline),
+        date: toIso(data.ceremonyDate) || wedding.date
       }
 
       await updateWeddingDetails(weddingId, payload)
