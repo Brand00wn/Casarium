@@ -1,8 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -70,24 +77,15 @@ export function MessagingPanel({ weddingSlug }: { weddingSlug: string }) {
   };
 
   if (loading) {
-    return <Card><CardContent className="p-6 text-sm text-muted-foreground">Carregando disparos...</CardContent></Card>;
+    return <p className="p-6 text-sm text-muted-foreground">Carregando disparos...</p>;
   }
 
   if (!cfg) {
-    return <Card><CardContent className="p-6 text-sm text-red-500">{error || "Erro ao carregar."}</CardContent></Card>;
+    return <p className="p-6 text-sm text-red-500">{error || "Erro ao carregar."}</p>;
   }
 
   return (
-    <Card className="border-primary/20">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Send className="w-5 h-5 text-primary" /> Disparos de WhatsApp
-        </CardTitle>
-        <CardDescription>
-          Convites automáticos antes da festa + lembretes para quem não confirmou. Visível só para a equipe do cerimonial.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
+    <div className="space-y-6">
         {error && <p className="text-sm text-red-500">{error}</p>}
 
         <div className="grid gap-6 md:grid-cols-2">
@@ -185,7 +183,33 @@ export function MessagingPanel({ weddingSlug }: { weddingSlug: string }) {
             )}
           </div>
         )}
-      </CardContent>
-    </Card>
+    </div>
+  );
+}
+
+/** Botão que abre as configurações de disparo em modal. */
+export function MessagingModalButton({ weddingSlug }: { weddingSlug: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={
+        <Button variant="outline" className="gap-2">
+          <Send className="w-4 h-4" />
+          Disparos WhatsApp
+        </Button>
+      } />
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Send className="w-5 h-5 text-primary" /> Disparos de WhatsApp
+          </DialogTitle>
+          <CardDescription>
+            Convites automáticos antes da festa + lembretes para quem não confirmou. Visível só para a equipe do cerimonial.
+          </CardDescription>
+        </DialogHeader>
+        <MessagingPanel weddingSlug={weddingSlug} />
+      </DialogContent>
+    </Dialog>
   );
 }

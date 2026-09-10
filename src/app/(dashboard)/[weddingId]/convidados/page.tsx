@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { GuestDialog } from "@/components/guests/guest-dialog"
 import { DeleteGuestButton } from "@/components/guests/delete-guest-button"
 import { WhatsAppButton } from "@/components/guests/whatsapp-button"
-import { MessagingPanel } from "@/components/guests/messaging-panel"
+import { MessagingModalButton } from "@/components/guests/messaging-panel"
 import { ImportGuestsDialog } from "@/components/guests/import-guests-dialog"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Edit, Sparkles, Phone, Printer } from "lucide-react"
@@ -123,10 +123,9 @@ export default async function ConvidadosPage({
           </Link>
           <ImportGuestsDialog weddingId={weddingId} />
           <GuestDialog weddingId={weddingId} />
+          {canSendMessages && <MessagingModalButton weddingSlug={weddingId} />}
         </div>
       </div>
-
-      {canSendMessages && <MessagingPanel weddingSlug={weddingId} />}
 
       <div className="rounded-md border bg-card">
         <Table>
