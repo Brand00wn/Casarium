@@ -13,7 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Send, BellRing, Loader2, RotateCcw, MailPlus, ChevronDown } from "lucide-react";
+import { Send, BellRing, Loader2, RotateCcw, MailPlus, ChevronDown, QrCode } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import {
   getMessagingConfig,
@@ -258,6 +258,16 @@ export function MessagingPanel({ weddingSlug }: { weddingSlug: string }) {
           </Button>
         </div>
         <VariablesLegend />
+        <div className="flex gap-2.5 rounded-lg border border-primary/25 bg-primary/5 p-3 text-xs leading-relaxed">
+          <QrCode className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
+          <p>
+            {isInvites ? (
+              <>Junto com o texto, o <strong>titular de cada convite recebe a imagem do QR Code de entrada</strong> (ele carrega o código do convite e <strong>vale para toda a família</strong> — os acompanhantes usam o mesmo QR na portaria).</>
+            ) : (
+              <>O lembrete reenvia o texto <strong>junto com o QR Code de entrada</strong> do titular, para ninguém ficar sem o código no dia.</>
+            )}
+          </p>
+        </div>
         <Textarea
           rows={5}
           value={isInvites
@@ -282,6 +292,10 @@ export function MessagingPanel({ weddingSlug }: { weddingSlug: string }) {
                 : (cfg.reminderTemplate ?? DEFAULT_REMINDER_TEMPLATE),
               PREVIEW_VARS
             )}
+            <div className="mt-2 pt-2 border-t border-dashed border-foreground/15 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <QrCode className="w-4 h-4" />
+              + imagem do QR Code de entrada ({PREVIEW_VARS.codigo}) em seguida
+            </div>
           </div>
         </div>
       </section>
