@@ -104,18 +104,20 @@ export default async function WeddingSitePage({ params }: { params: Promise<{ we
   const padrinhos = wedding.partyMembers || []
   const vendors = wedding.vendorRecommendations || []
 
-  const parkingInfo = [
-    wedding.ceremonyParkingType && wedding.ceremonyParkingType !== "none"
-      ? { label: "Cerimônia", value: PARKING_LABELS[wedding.ceremonyParkingType] || wedding.ceremonyParkingType }
-      : null,
-    wedding.receptionParkingType && wedding.receptionParkingType !== "none"
-      ? { label: "Recepção", value: PARKING_LABELS[wedding.receptionParkingType] || wedding.receptionParkingType }
-      : null,
-  ].filter((x): x is { label: string, value: string } => !!x && !!x.value)
+  const showReception = wedding.showReceptionInfo !== false && !!wedding.receptionLocation;
+
+  const parkingOf = (kind: "ceremony" | "reception") => {
+    const raw = kind === "ceremony" ? wedding.ceremonyParkingType : wedding.receptionParkingType;
+    if (!raw || raw === "none") return null;
+    return PARKING_LABELS[raw] || raw;
+  };
+
+  const ceremonyParking = parkingOf("ceremony");
+  const receptionParking = showReception ? parkingOf("reception") : null;
 
   const hasLogistics =
-    wedding.ceremonyLocation || wedding.receptionLocation ||
-    parkingInfo.length > 0 ||
+    !!wedding.ceremonyLocation || showReception ||
+    !!ceremonyParking || !!receptionParking ||
     (wedding.hasAccommodationTips && wedding.accommodationTips) ||
     vendors.length > 0
 
@@ -250,65 +252,64 @@ export default async function WeddingSitePage({ params }: { params: Promise<{ we
               <h2 className="font-display text-4xl md:text-5xl font-medium">Tudo para você chegar bem</h2>
             </div>
             <div className="grid gap-6 md:grid-cols-2">
-              {(wedding.ceremonyLocation || wedding.receptionLocation) && (
-                <div className="rounded-2xl border border-border/70 bg-background p-8 shadow-sm">
-                  <div className="flex items-center gap-2.5 mb-6">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Navigation className="w-4.5 h-4.5 text-primary" />
-                    </div>
-                    <h3 className="font-display text-2xl">Como chegar</h3>
+              {wedding.ceremonyLocation && (
+                <div className="rounded-2xl border border-border/70 bg-background p-8 text-center shadow-sm">
+                  <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                    <MapPin className="w-5 h-5 text-primary" />
                   </div>
-                  <div className="space-y-6">
-                    {wedding.ceremonyLocation && (
-                      <div className="flex items-start gap-3">
-                        <MapPin className="w-4 h-4 mt-1 shrink-0 text-primary" />
-                        <div className="space-y-2">
-                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Cerimônia</p>
-                          <p className="font-medium leading-snug">{wedding.ceremonyLocation}</p>
-                          <MapsButton address={wedding.ceremonyLocation} />
-                        </div>
-                      </div>
-                    )}
-                    {wedding.receptionLocation && (
-                      <div className="flex items-start gap-3">
-                        <MapPin className="w-4 h-4 mt-1 shrink-0 text-primary" />
-                        <div className="space-y-2">
-                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Recepção</p>
-                          <p className="font-medium leading-snug">{wedding.receptionLocation}</p>
-                          <MapsButton address={wedding.receptionLocation} />
-                        </div>
-                      </div>
-                    )}
+                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">Cerimônia</p>
+                  <p className="mt-2 font-display text-2xl leading-snug">{wedding.ceremonyLocation}</p>
+                  {ceremonyParking && (
+                    <p className="mt-2 text-sm text-muted-foreground flex items-center justify-center gap-1.5">
+                      <Car className="w-3.5 h-3.5" /> {ceremonyParking}
+                    </p>
+                  )}
+                  <div className="mt-4">
+                    <MapsButton address={wedding.ceremonyLocation} />
                   </div>
                 </div>
               )}
 
-              {(parkingInfo.length > 0 || (wedding.hasAccommodationTips && wedding.accommodationTips)) && (
-                <div className="rounded-2xl border border-border/70 bg-background p-8 shadow-sm space-y-6">
-                  {parkingInfo.length > 0 && (
-                    <div>
-                      <div className="flex items-center gap-2 mb-3">
-                        <Car className="w-5 h-5 text-primary" />
-                        <h3 className="font-display text-2xl">Estacionamento</h3>
-                      </div>
-                      <ul className="space-y-1.5 text-sm">
-                        {parkingInfo.map((p, i) => (
-                          <li key={i}><span className="font-medium">{p.label}:</span> {p.value}</li>
-                        ))}
-                      </ul>
-                    </div>
+              {showReception && (
+                <div className="rounded-2xl border border-border/70 bg-background p-8 text-center shadow-sm">
+                  <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                    <MapPin className="w-5 h-5 text-primary" />
+                  </div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">Recepção</p>
+                  <p className="mt-2 font-display text-2xl leading-snug">{wedding.receptionLocation}</p>
+                  {receptionParking && (
+                    <p className="mt-2 text-sm text-muted-foreground flex items-center justify-center gap-1.5">
+                      <Car className="w-3.5 h-3.5" /> {receptionParking}
+                    </p>
                   )}
-                  {wedding.hasAccommodationTips && wedding.accommodationTips && (
-                    <div>
-                      <div className="flex items-center gap-2 mb-3">
-                        <BedDouble className="w-5 h-5 text-primary" />
-                        <h3 className="font-display text-2xl">Onde ficar</h3>
-                      </div>
-                      <p className="text-sm leading-relaxed whitespace-pre-wrap">{wedding.accommodationTips}</p>
-                    </div>
-                  )}
+                  <div className="mt-4">
+                    <MapsButton address={wedding.receptionLocation!} />
+                  </div>
                 </div>
               )}
+
+              {wedding.hasAccommodationTips && wedding.accommodationTips && (
+                <div className="rounded-2xl border border-border/70 bg-background p-8 text-center shadow-sm md:col-span-2">
+                  <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                    <BedDouble className="w-5 h-5 text-primary" />
+                  </div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">Onde ficar</p>
+                  <p className="mt-2 text-base leading-relaxed whitespace-pre-wrap max-w-2xl mx-auto">{wedding.accommodationTips}</p>
+                </div>
+              )}
+
+              {(ceremonyParking && !wedding.ceremonyLocation) || (receptionParking && !showReception) ? (
+                <div className="rounded-2xl border border-border/70 bg-background p-8 text-center shadow-sm md:col-span-2">
+                  <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                    <Car className="w-5 h-5 text-primary" />
+                  </div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">Estacionamento</p>
+                  <div className="mt-2 space-y-1 text-sm">
+                    {ceremonyParking && !wedding.ceremonyLocation && <p><span className="font-medium">Cerimônia:</span> {ceremonyParking}</p>}
+                    {receptionParking && !showReception && <p><span className="font-medium">Recepção:</span> {receptionParking}</p>}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             {vendors.length > 0 && (

@@ -105,6 +105,7 @@ export async function updateWeddingDetails(weddingId: string, data: any) {
       sitePassword: data.sitePassword || null,
       hasReception: data.hasReception ?? true,
       isSameLocation: data.isSameLocation ?? false,
+      showReceptionInfo: data.showReceptionInfo ?? true,
       rsvpDeadline: data.rsvpDeadline ? parseDateTime(data.rsvpDeadline) : null,
       rsvpMessage: data.rsvpMessage || null,
       spotifyLink: data.spotifyLink || null,

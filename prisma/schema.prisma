@@ -97,6 +97,8 @@ model Wedding {
   // Flexibilidade do Evento
   hasReception   Boolean @default(true)
   isSameLocation Boolean @default(false)
+  // Mostrar endereço da recepção no site? (não exibir evita que pulem a cerimônia)
+  showReceptionInfo Boolean @default(true)
 
   // RSVP
   rsvpDeadline DateTime?

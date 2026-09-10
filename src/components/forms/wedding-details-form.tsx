@@ -96,6 +96,7 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
       receptionType: currentReceptionType,
       receptionDate: formatDateForInput(w.receptionDate),
       receptionLocation: w.receptionLocation || "",
+      showReceptionInfo: w.showReceptionInfo ?? true,
       receptionPlaceId: w.receptionPlaceId || "",
       dressCode: w.dressCode || "",
       primaryColor: w.primaryColor || "#5C8B6B",
@@ -132,10 +133,30 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
   const dirtyRef = useRef(false)
   dirtyRef.current = isDirty
 
+  // Baseline do último estado sincronizado com o servidor. Quando o save
+  // termina, o servidor revalida e devolve os mesmos dados — sem esse
+  // comparativo, o reset do "eco" remontaria os inputs e roubaria o foco
+  // (ex: ao abrir um select logo após salvar).
+  const baselineRef = useRef("")
+
+  const stable = (v: any): string => {
+    if (v === null || v === undefined) return JSON.stringify(v);
+    if (v instanceof Date) return v.toISOString();
+    if (Array.isArray(v)) return `[${v.map(stable).join(",")}]`;
+    if (typeof v === "object") {
+      return `{${Object.keys(v).sort().map(k => `${JSON.stringify(k)}:${stable(v[k])}`).join(",")}}`;
+    }
+    return JSON.stringify(v);
+  };
+
   // Watch for external changes (like AI API calls that trigger router.refresh)
-  // — mas só quando o usuário NÃO está com edição pendente.
+  // — mas nunca com edição pendente e nunca no eco do próprio save.
   useEffect(() => {
-    if (!dirtyRef.current) reset(getFormValues(wedding))
+    if (dirtyRef.current) return
+    const fresh = stable(getFormValues(wedding))
+    if (baselineRef.current && fresh === baselineRef.current) return
+    baselineRef.current = fresh
+    reset(getFormValues(wedding))
   }, [wedding, reset])
 
   const { fields: vendorFields, append: appendVendor, remove: removeVendor } = useFieldArray({
@@ -186,7 +207,9 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
     savingRef.current = true
     try {
       await handleSubmit(onSubmit)()
-      reset(getValues())
+      const synced = getValues()
+      reset(synced)
+      baselineRef.current = stable(synced)
     } finally {
       savingRef.current = false
       if (queuedRef.current) {
@@ -795,6 +818,24 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
                       <p className="text-xs text-muted-foreground">Pesquise acima o nome ou endereço no Google Maps e clique para selecionar.</p>
                     </div>
                   )}
+                </div>
+              )}
+
+              {receptionType === "different" && (
+                <div className="flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 p-4">
+                  <div>
+                    <Label className="font-semibold">Mostrar festa no site</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Desligado, os convidados veem só a cerimônia — evita que pulem direto para a festa.
+                    </p>
+                  </div>
+                  <Controller
+                    name="showReceptionInfo"
+                    control={control}
+                    render={({ field }) => (
+                      <Switch checked={!!field.value} onCheckedChange={field.onChange} />
+                    )}
+                  />
                 </div>
               )}
             </CardContent>
