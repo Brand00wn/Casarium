@@ -281,13 +281,13 @@ export function MessagingModalButton({ weddingSlug }: { weddingSlug: string }) {
       <DialogTrigger render={
         <Button variant="outline" className="gap-2">
           <Send className="w-4 h-4" />
-          Disparos WhatsApp
+          Envios de Convites e Lembretes
         </Button>
       } />
       <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Send className="w-5 h-5 text-primary" /> Disparos de WhatsApp
+            <Send className="w-5 h-5 text-primary" /> Envios de Convites e Lembretes
           </DialogTitle>
           <CardDescription>
             Convites automáticos antes da festa + lembretes para quem não confirmou. Visível só para a equipe do cerimonial.
