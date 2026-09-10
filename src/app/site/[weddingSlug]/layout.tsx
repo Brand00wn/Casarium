@@ -46,12 +46,6 @@ export default async function SiteLayout({
             {siteGuest && (
               <SiteGuestBadge guestName={siteGuest.name} weddingSlug={wedding.slug} />
             )}
-            <Link
-              href={`/site/${wedding.slug}/rsvp`}
-              className="hidden sm:inline-flex items-center justify-center h-9 px-5 rounded-full bg-primary text-primary-foreground text-[13px] font-semibold uppercase tracking-[0.12em] hover:bg-primary/90 transition-colors"
-            >
-              RSVP
-            </Link>
           </div>
         </div>
         <nav className="md:hidden flex items-center justify-center gap-6 pb-3 text-xs font-medium uppercase tracking-[0.15em]">

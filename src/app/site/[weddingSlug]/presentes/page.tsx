@@ -26,14 +26,17 @@ export default async function GiftsSitePage({
   const siteGuest = await getSiteGuestBySlug(weddingSlug);
 
   return (
-    <div className="py-16 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto space-y-12">
-        <PageHero
-          eyebrow="Lista de presentes"
-          title={`${wedding.partner1Name} & ${wedding.partner2Name}`}
-          description="Sua presença é o maior presente — mas se quiser nos mimar, escolha com carinho."
-        />
-
+    <div className="pb-16">
+      <div className="bg-gradient-to-b from-primary/[0.10] via-primary/[0.04] to-background pt-16 pb-10 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <PageHero
+            eyebrow="Lista de presentes"
+            title={`${wedding.partner1Name} & ${wedding.partner2Name}`}
+            description="Sua presença é o maior presente — mas se quiser nos mimar, escolha com carinho."
+          />
+        </div>
+      </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {gifts.length === 0 ? (
           <div className="text-center text-muted-foreground font-light mt-12">
             A lista de presentes ainda não foi montada.

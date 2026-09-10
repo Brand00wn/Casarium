@@ -147,8 +147,14 @@ export default function RsvpPage() {
   }
 
   return (
-<div className="flex-1 flex items-center justify-center p-4 py-12">
-      <div className="w-full max-w-2xl space-y-8">
+<div className="flex-1 flex flex-col items-center p-4 py-0 pb-16">
+      <div className="w-full bg-gradient-to-b from-primary/[0.10] via-primary/[0.04] to-transparent pt-12 pb-10 px-4 -mx-4">
+        <div className="max-w-2xl mx-auto text-center space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-primary">Confirmação de presença</p>
+          <p className="font-display text-2xl italic text-muted-foreground font-light">Leva menos de um minuto</p>
+        </div>
+      </div>
+      <div className="w-full max-w-2xl space-y-8 -mt-2">
         <div className="flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-[0.2em]">
           {["Buscar", "Código", "Confirmar"].map((label, i) => {
             const n = i + 1
@@ -184,7 +190,7 @@ export default function RsvpPage() {
                   />
                   {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
                 </div>
-                <Button type="submit" disabled={loading} className="w-full h-14 text-lg">
+                <Button type="submit" disabled={loading} className="w-full h-14 text-lg rounded-full">
                   {loading ? "Buscando..." : "Procurar Convite"}
                 </Button>
               </form>
@@ -229,8 +235,8 @@ export default function RsvpPage() {
                   {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
                 </div>
                 <div className="flex gap-4">
-                  <Button type="button" variant="outline" onClick={() => { setStep(1); setSelected(null); setToken(""); setError("") }} className="flex-1 h-14">Voltar</Button>
-                  <Button type="submit" disabled={loading || !selected || !token.trim()} className="flex-1 h-14">
+                  <Button type="button" variant="outline" onClick={() => { setStep(1); setSelected(null); setToken(""); setError("") }} className="flex-1 h-14 rounded-full">Voltar</Button>
+                  <Button type="submit" disabled={loading || !selected || !token.trim()} className="flex-1 h-14 rounded-full">
                     {loading ? "Validando..." : "Acessar Convite"}
                   </Button>
                 </div>
@@ -312,8 +318,8 @@ export default function RsvpPage() {
               ))}
 
               <div className="flex gap-4 pt-4">
-                <Button variant="outline" onClick={() => setStep(1)} className="flex-1 h-14">Voltar</Button>
-                <Button onClick={handleSubmit} disabled={loading} className="flex-1 h-14">
+                <Button variant="outline" onClick={() => setStep(1)} className="flex-1 h-14 rounded-full">Voltar</Button>
+                <Button onClick={handleSubmit} disabled={loading} className="flex-1 h-14 rounded-full">
                   {loading ? "Salvando..." : "Confirmar RSVP"}
                 </Button>
               </div>

@@ -83,7 +83,7 @@ export default function GiftGrid({
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {gifts.map((gift) => (
-          <Card key={gift.id} className="overflow-hidden flex flex-col rounded-2xl border-border/70 hover:shadow-xl transition-shadow">
+          <Card key={gift.id} className="group overflow-hidden flex flex-col rounded-2xl border-border/70 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
             {gift.imageUrl ? (
               <div className="w-full h-52 bg-muted">
                 <img src={gift.imageUrl} alt={gift.name} className="w-full h-full object-cover" />
