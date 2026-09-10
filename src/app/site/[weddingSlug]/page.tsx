@@ -355,12 +355,9 @@ export default async function WeddingSitePage({ params }: { params: Promise<{ we
                           </p>
                         )}
                         {v.address && (
-                          <p className="mt-1 text-sm text-muted-foreground flex items-start gap-1">
-                            <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                            <a href={mapsUrl(v.address)} target="_blank" rel="noopener noreferrer" className="hover:text-primary hover:underline">
-                              {v.address}
-                            </a>
-                          </p>
+                          <div className="mt-3">
+                            <MapsButton address={v.address} />
+                          </div>
                         )}
                         {v.notes && <p className="mt-2 text-sm font-light italic border-t border-border/50 pt-2">“{v.notes}”</p>}
                       </div>

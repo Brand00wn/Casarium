@@ -135,11 +135,12 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
   const dirtyRef = useRef(false)
   dirtyRef.current = isDirty
 
-  // Baseline do último estado sincronizado com o servidor. Quando o save
-  // termina, o servidor revalida e devolve os mesmos dados — sem esse
-  // comparativo, o reset do "eco" remontaria os inputs e roubaria o foco
-  // (ex: ao abrir um select logo após salvar).
+  // Baseline do último estado sincronizado com o servidor + flag de eco:
+  // quando o save termina, o servidor revalida e devolve os mesmos dados
+  // (às vezes com guestId/order pareados pelo sync). Sem consumir esse eco,
+  // o reset remontaria os inputs e roubaria o foco (ex: autocomplete de local).
   const baselineRef = useRef("")
+  const echoRef = useRef(false)
 
   const stable = (v: any): string => {
     if (v === null || v === undefined) return JSON.stringify(v);
@@ -157,6 +158,12 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
   // — mas nunca com edição pendente e nunca no eco do próprio save.
   useEffect(() => {
     if (dirtyRef.current) return
+    if (echoRef.current) {
+      // Eco do nosso save: atualiza a baseline e consome, sem remontar nada.
+      echoRef.current = false
+      baselineRef.current = stable(getFormValues(wedding))
+      return
+    }
     const fresh = stable(getFormValues(wedding))
     if (baselineRef.current && fresh === baselineRef.current) return
     baselineRef.current = fresh
@@ -216,6 +223,10 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
       const synced = getValues()
       reset(synced)
       baselineRef.current = stable(synced)
+      echoRef.current = true
+      // Seguro: se o eco não chegar (revalidação mesclada), libera em 10s
+      // para não engolir uma mudança externa futura.
+      setTimeout(() => { echoRef.current = false }, 10000)
     } finally {
       savingRef.current = false
       if (queuedRef.current) {
