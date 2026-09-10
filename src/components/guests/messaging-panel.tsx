@@ -13,7 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Send, BellRing, Loader2, RotateCcw, Eye } from "lucide-react";
+import { Send, BellRing, Loader2, RotateCcw } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import {
   DEFAULT_INVITE_TEMPLATE,
@@ -39,7 +39,12 @@ export function MessagingPanel({ weddingSlug }: { weddingSlug: string }) {
   const [sending, setSending] = useState<"invites" | "reminders" | null>(null);
   const [result, setResult] = useState<{ kind: string, summary: Summary } | null>(null);
   const [error, setError] = useState("");
-  const [showPreview, setShowPreview] = useState(false);
+
+  const varExample = (key: string) => {
+    const field = key.replace("{", "").replace("}", "") as keyof typeof PREVIEW_VARS;
+    const value = PREVIEW_VARS[field];
+    return String(value);
+  };
 
   useEffect(() => {
     getMessagingConfig(weddingSlug)
@@ -175,19 +180,20 @@ export function MessagingPanel({ weddingSlug }: { weddingSlug: string }) {
         <div className="space-y-4 p-4 rounded-lg border">
           <div className="flex items-center justify-between">
             <Label className="font-semibold">Textos das mensagens</Label>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowPreview(v => !v)}
-              className="gap-1.5 text-xs"
-            >
-              <Eye className="w-3.5 h-3.5" /> {showPreview ? "Ocultar prévia" : "Ver prévia"}
-            </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Variáveis: {TEMPLATE_VARS.map(v => `${v.key} (${v.label})`).join(" · ")}
-          </p>
+          <div className="rounded-md bg-muted/40 border p-3 space-y-1.5">
+            <p className="text-xs font-semibold text-muted-foreground">Variáveis disponíveis (exemplo entre parênteses):</p>
+            <ul className="grid gap-1 sm:grid-cols-2">
+              {TEMPLATE_VARS.map(v => (
+                <li key={v.key} className="text-xs flex items-baseline gap-1.5">
+                  <code className="font-mono font-semibold text-primary shrink-0">{v.key}</code>
+                  <span className="text-muted-foreground truncate" title={`${v.label}: ${varExample(v.key)}`}>
+                    {v.label} → “{varExample(v.key).length > 40 ? varExample(v.key).slice(0, 40) + "…" : varExample(v.key)}”
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -206,11 +212,12 @@ export function MessagingPanel({ weddingSlug }: { weddingSlug: string }) {
               onChange={(e) => setCfg({ ...cfg, inviteTemplate: e.target.value })}
               className="font-mono text-sm"
             />
-            {showPreview && (
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground mb-1.5">Prévia do convite — como chega no WhatsApp:</p>
               <div className="p-3 rounded-md bg-green-50 border border-green-200 text-sm whitespace-pre-wrap">
                 {renderMessageTemplate(cfg.inviteTemplate ?? DEFAULT_INVITE_TEMPLATE, PREVIEW_VARS)}
               </div>
-            )}
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -230,11 +237,12 @@ export function MessagingPanel({ weddingSlug }: { weddingSlug: string }) {
               onChange={(e) => setCfg({ ...cfg, reminderTemplate: e.target.value })}
               className="font-mono text-sm"
             />
-            {showPreview && (
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground mb-1.5">Prévia do lembrete — como chega no WhatsApp:</p>
               <div className="p-3 rounded-md bg-amber-50 border border-amber-200 text-sm whitespace-pre-wrap">
                 {renderMessageTemplate(cfg.reminderTemplate ?? DEFAULT_REMINDER_TEMPLATE, PREVIEW_VARS)}
               </div>
-            )}
+            </div>
           </div>
         </div>
 
