@@ -43,28 +43,29 @@ export async function sendInvite(weddingSlugOrId: string, guestId: string) {
 Confirme sua presença no link: ${rsvpLink}
 ${familySize > 1 ? `Este convite vale para ${familySize} pessoas. ` : ""}Seu código é: ${guest.token}`;
 
-    const textOk = await sendWhatsAppMessage(guest.phone, message);
+    const textRes = await sendWhatsAppMessage(guest.phone, message);
+    if (!textRes.ok) {
+      return { success: false, error: textRes.error };
+    }
 
     // QR de entrada: um por representante (titular). O QR carrega o token.
-    let mediaOk = true;
     if (guest.isPrimary) {
       const qrImage = await guestCodeQrDataUrl(guest.token);
-      mediaOk = await sendWhatsAppImage(
+      const mediaRes = await sendWhatsAppImage(
         guest.phone,
         qrImage,
         `🎟️ Este é seu QR Code de entrada${familySize > 1 ? ` (vale para ${familySize} pessoas)` : ""}. Apresente na portaria do evento.`
       );
+      if (!mediaRes.ok) {
+        return { success: false, error: `Texto enviado, mas o QR falhou: ${mediaRes.error}` };
+      }
     }
 
-    if (textOk && mediaOk) {
-      await prisma.guest.update({
-        where: { id: guestId },
-        data: { whatsappStatus: WhatsAppStatus.SENT }
-      });
-      return { success: true };
-    }
-
-    return { success: false, error: "Failed to send WhatsApp invite" };
+    await prisma.guest.update({
+      where: { id: guestId },
+      data: { whatsappStatus: WhatsAppStatus.SENT }
+    });
+    return { success: true };
   } catch (error) {
     console.error("Error sending WhatsApp invite:", error);
     return { success: false, error: "Failed to send WhatsApp invite" };
