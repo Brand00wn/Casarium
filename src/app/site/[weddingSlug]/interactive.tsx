@@ -6,37 +6,64 @@ import { postMessage } from "@/app/actions/rsvp"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent } from "@/components/ui/card"
+import { Heart } from "lucide-react"
 
-export function SiteInteractive({ weddingDate, slug, initialMessages }: { weddingDate: string, slug: string, initialMessages: any[] }) {
+export function Countdown({ weddingDate }: { weddingDate: string }) {
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 })
-  const [messages, setMessages] = useState(initialMessages)
-  const [name, setName] = useState("")
-  const [content, setContent] = useState("")
-  const [submitting, setSubmitting] = useState(false)
+  const [isLive, setIsLive] = useState(true)
 
   useEffect(() => {
     const targetDate = new Date(weddingDate)
-    
-    const interval = setInterval(() => {
-      const now = new Date()
-      const diff = differenceInSeconds(targetDate, now)
-      
+
+    const tick = () => {
+      const diff = differenceInSeconds(targetDate, new Date())
       if (diff <= 0) {
-        clearInterval(interval)
+        setIsLive(false)
         return
       }
+      setTimeLeft({
+        days: Math.floor(diff / (3600 * 24)),
+        hours: Math.floor((diff % (3600 * 24)) / 3600),
+        minutes: Math.floor((diff % 3600) / 60),
+        seconds: diff % 60,
+      })
+    }
 
-      const days = Math.floor(diff / (3600 * 24))
-      const hours = Math.floor((diff % (3600 * 24)) / 3600)
-      const minutes = Math.floor((diff % 3600) / 60)
-      const seconds = diff % 60
-
-      setTimeLeft({ days, hours, minutes, seconds })
-    }, 1000)
-
+    tick()
+    const interval = setInterval(tick, 1000)
     return () => clearInterval(interval)
   }, [weddingDate])
+
+  if (!isLive) {
+    return <p className="font-display text-3xl italic text-primary mt-4">Este dia já chegou — celebremos juntos!</p>
+  }
+
+  const units = [
+    { label: "Dias", value: timeLeft.days },
+    { label: "Horas", value: timeLeft.hours },
+    { label: "Minutos", value: timeLeft.minutes },
+    { label: "Segundos", value: timeLeft.seconds },
+  ]
+
+  return (
+    <div className="flex justify-center gap-3 md:gap-6 mt-8">
+      {units.map((item) => (
+        <div key={item.label} className="flex flex-col items-center min-w-[72px] md:min-w-[104px]">
+          <div className="w-full rounded-2xl border border-border/70 bg-background py-4 md:py-6 text-3xl md:text-5xl font-display font-semibold text-foreground tabular-nums shadow-sm">
+            {item.value.toString().padStart(2, "0")}
+          </div>
+          <span className="text-[11px] md:text-xs mt-2 text-muted-foreground uppercase tracking-[0.2em]">{item.label}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export function Mural({ slug, initialMessages, guestName }: { slug: string, initialMessages: any[], guestName: string }) {
+  const [messages, setMessages] = useState(initialMessages)
+  const [name, setName] = useState(guestName)
+  const [content, setContent] = useState("")
+  const [submitting, setSubmitting] = useState(false)
 
   const handlePostMessage = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,7 +73,6 @@ export function SiteInteractive({ weddingDate, slug, initialMessages }: { weddin
     try {
       await postMessage(slug, name, content)
       setMessages([{ authorName: name, content, createdAt: new Date() }, ...messages])
-      setName("")
       setContent("")
     } catch (error) {
       console.error(error)
@@ -57,66 +83,42 @@ export function SiteInteractive({ weddingDate, slug, initialMessages }: { weddin
   }
 
   return (
-    <>
-      <div className="flex justify-center gap-4 md:gap-8 mb-12">
-        {[
-          { label: "Dias", value: timeLeft.days },
-          { label: "Horas", value: timeLeft.hours },
-          { label: "Minutos", value: timeLeft.minutes },
-          { label: "Segundos", value: timeLeft.seconds }
-        ].map((item, i) => (
-          <div key={i} className="flex flex-col items-center">
-            <div className="w-16 h-16 md:w-24 md:h-24 bg-background/50 backdrop-blur-md rounded-2xl flex items-center justify-center text-2xl md:text-4xl font-bold text-primary shadow-inner border border-white/30">
-              {item.value.toString().padStart(2, '0')}
-            </div>
-            <span className="text-xs md:text-sm mt-2 text-foreground/80 uppercase tracking-widest">{item.label}</span>
-          </div>
+    <div className="space-y-8">
+      <form onSubmit={handlePostMessage} className="rounded-2xl border border-border/70 bg-background p-6 space-y-4 shadow-sm">
+        <Input
+          placeholder="Seu nome"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          className="h-12 bg-muted/40"
+          required
+        />
+        <Textarea
+          placeholder="Deixe uma mensagem aos noivos..."
+          value={content}
+          onChange={e => setContent(e.target.value)}
+          className="bg-muted/40 min-h-[100px]"
+          required
+        />
+        <Button type="submit" disabled={submitting} className="w-full h-12 rounded-full text-sm font-semibold uppercase tracking-[0.12em]">
+          {submitting ? "Enviando..." : "Deixar recado"}
+        </Button>
+      </form>
+
+      <div className="space-y-4">
+        {messages.map((msg, i) => (
+          <figure key={i} className="rounded-2xl border border-border/70 bg-background p-6 shadow-sm">
+            <blockquote className="font-display text-xl italic leading-relaxed text-foreground/90">
+              “{msg.content}”
+            </blockquote>
+            <figcaption className="mt-3 flex items-center justify-end gap-1.5 text-sm font-medium text-primary">
+              <Heart className="w-3.5 h-3.5 fill-current" /> {msg.authorName}
+            </figcaption>
+          </figure>
         ))}
+        {messages.length === 0 && (
+          <p className="text-center text-muted-foreground font-light">Seja a primeira pessoa a deixar um recado!</p>
+        )}
       </div>
-
-      <div id="mural" className="mt-32 max-w-2xl mx-auto text-left">
-        <h2 className="text-3xl font-serif text-primary mb-8 text-center">Mural de Recados</h2>
-        
-        <Card className="bg-background/60 backdrop-blur-xl border-white/20 shadow-xl mb-12">
-          <CardContent className="p-6">
-            <form onSubmit={handlePostMessage} className="space-y-4">
-              <div>
-                <Input 
-                  placeholder="Seu nome" 
-                  value={name} 
-                  onChange={e => setName(e.target.value)} 
-                  className="bg-background/50 border-white/10"
-                  required
-                />
-              </div>
-              <div>
-                <Textarea 
-                  placeholder="Deixe uma mensagem aos noivos..." 
-                  value={content} 
-                  onChange={e => setContent(e.target.value)} 
-                  className="bg-background/50 border-white/10 min-h-[100px]"
-                  required
-                />
-              </div>
-              <Button type="submit" disabled={submitting} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-                {submitting ? "Enviando..." : "Deixar Recado"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <div className="space-y-6">
-          {messages.map((msg, i) => (
-            <div key={i} className="bg-white/40 backdrop-blur-sm p-6 rounded-2xl shadow-sm border border-white/30">
-              <p className="text-foreground/90 text-lg italic mb-4">"{msg.content}"</p>
-              <p className="text-right text-sm text-primary font-medium">— {msg.authorName}</p>
-            </div>
-          ))}
-          {messages.length === 0 && (
-            <p className="text-center text-muted-foreground">Seja o primeiro a deixar um recado!</p>
-          )}
-        </div>
-      </div>
-    </>
+    </div>
   )
 }

@@ -147,14 +147,28 @@ export default function RsvpPage() {
   }
 
   return (
-    <div className="flex-1 flex items-center justify-center p-4 py-12 relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 via-background to-secondary/10 -z-10" />
-
-      <div className="w-full max-w-2xl">
+<div className="flex-1 flex items-center justify-center p-4 py-12">
+      <div className="w-full max-w-2xl space-y-8">
+        <div className="flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-[0.2em]">
+          {["Buscar", "Código", "Confirmar"].map((label, i) => {
+            const n = i + 1
+            const active = step === n || (n === 3 && step === 4)
+            const done = step > n || step === 4
+            return (
+              <div key={label} className="flex items-center gap-2">
+                <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] ${done ? "bg-primary text-primary-foreground" : active ? "border border-primary text-primary" : "border border-border text-muted-foreground"}`}>
+                  {done ? "✓" : n}
+                </span>
+                <span className={active || done ? "text-foreground" : "text-muted-foreground"}>{label}</span>
+                {n < 3 && <span className="w-6 h-px bg-border mx-1" />}
+              </div>
+            )
+          })}
+        </div>
         {step === 1 && (
-          <Card className="bg-white/60 backdrop-blur-xl border-white/40 shadow-2xl">
+          <Card className="bg-card border-border/70 shadow-xl">
             <CardHeader className="text-center pb-8">
-              <CardTitle className="text-4xl font-serif text-primary">Confirme sua Presença</CardTitle>
+              <CardTitle className="text-4xl font-display font-medium text-primary">Confirme sua Presença</CardTitle>
               <CardDescription className="text-lg">
                 Digite parte do seu nome ou o código do convite que você recebeu no WhatsApp.
               </CardDescription>
@@ -166,7 +180,7 @@ export default function RsvpPage() {
                     placeholder="Ex: João ou ABCD1234"
                     value={query}
                     onChange={e => setQuery(e.target.value)}
-                    className="h-14 text-lg bg-white/50 border-white/50"
+                    className="h-14 text-lg bg-muted/40"
                   />
                   {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
                 </div>
@@ -179,9 +193,9 @@ export default function RsvpPage() {
         )}
 
         {step === 2 && (
-          <Card className="bg-white/60 backdrop-blur-xl border-white/40 shadow-2xl">
+          <Card className="bg-card border-border/70 shadow-xl">
             <CardHeader className="text-center pb-6">
-              <CardTitle className="text-3xl font-serif text-primary">Encontrou você?</CardTitle>
+              <CardTitle className="text-3xl font-display font-medium text-primary">Encontrou você?</CardTitle>
               <CardDescription>
                 Selecione seu convite e digite o código recebido no WhatsApp para confirmar que é você.
               </CardDescription>
@@ -193,7 +207,7 @@ export default function RsvpPage() {
                     key={c.id}
                     type="button"
                     onClick={() => { setSelected(c); setError("") }}
-                    className={`w-full text-left p-4 rounded-xl border transition-all ${selected?.id === c.id ? 'border-primary bg-primary/5 shadow-sm' : 'bg-white/40 hover:border-primary/40'}`}
+                    className={`w-full text-left p-4 rounded-xl border transition-all ${selected?.id === c.id ? 'border-primary bg-primary/5 shadow-sm' : 'bg-muted/30 hover:border-primary/40'}`}
                   >
                     <p className="font-semibold text-lg">{c.name}</p>
                     <p className="text-sm text-muted-foreground">Convite para {c.familyCount} {c.familyCount === 1 ? 'pessoa' : 'pessoas'}</p>
@@ -209,7 +223,7 @@ export default function RsvpPage() {
                     placeholder="Ex: ABCD1234"
                     value={token}
                     onChange={e => setToken(e.target.value.toUpperCase())}
-                    className="h-14 text-lg tracking-widest text-center uppercase bg-white/50"
+                    className="h-14 text-lg tracking-widest text-center uppercase bg-muted/40"
                     maxLength={12}
                   />
                   {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
@@ -226,20 +240,20 @@ export default function RsvpPage() {
         )}
 
         {step === 3 && (
-          <Card className="bg-white/60 backdrop-blur-xl border-white/40 shadow-2xl">
+          <Card className="bg-card border-border/70 shadow-xl">
             <CardHeader className="text-center pb-8">
-              <CardTitle className="text-3xl font-serif text-primary">Olá, {guest.name}!</CardTitle>
+              <CardTitle className="text-3xl font-display font-medium text-primary">Olá, {guest.name}!</CardTitle>
               <CardDescription>
                 Por favor, confirme quem poderá comparecer e informe qualquer restrição alimentar.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-8">
               {familyUpdates.map((member, idx) => (
-                <div key={member.id} className="p-6 bg-white/40 rounded-2xl border border-white/50 shadow-sm space-y-6">
+                <div key={member.id} className="p-6 bg-muted/30 rounded-2xl border border-border/60 shadow-sm space-y-6">
                   <div>
                     <Label className="text-xl font-medium block mb-4">{member.name}</Label>
 
-                    <div className="space-y-3 bg-white/30 p-4 rounded-lg">
+                    <div className="space-y-3 bg-muted/40 p-4 rounded-xl">
                       {/* Main Wedding RSVP */}
                       <div className="flex items-center justify-between">
                         <Label className="text-base">Cerimônia Principal</Label>
@@ -256,7 +270,7 @@ export default function RsvpPage() {
 
                       {/* Sub-events RSVPs */}
                       {member.eventRsvps && member.eventRsvps.map((ev: any) => (
-                        <div key={ev.eventId} className="flex items-center justify-between pt-3 border-t border-white/20">
+                        <div key={ev.eventId} className="flex items-center justify-between pt-3 border-t border-border/50">
                           <Label className="text-base text-muted-foreground">{ev.title}</Label>
                           <div className="flex items-center space-x-3">
                             <span className={ev.rsvpStatus === 'CONFIRMED' ? "text-primary font-medium text-sm" : "text-muted-foreground text-sm"}>
@@ -273,14 +287,14 @@ export default function RsvpPage() {
                   </div>
 
                   {(member.rsvpStatus === 'CONFIRMED' || (member.eventRsvps && member.eventRsvps.some((ev:any) => ev.rsvpStatus === 'CONFIRMED'))) && (
-                    <div className="space-y-4 pt-4 border-t border-white/30">
+                    <div className="space-y-4 pt-4 border-t border-border/60">
                       <div className="space-y-2">
                         <Label>Restrições Alimentares?</Label>
                         <Input
                           placeholder="Ex: Vegano, Alergia a amendoim (deixe em branco se não houver)"
                           value={member.dietaryRestrictions.join(', ')}
                           onChange={e => updateMember(member.id, 'dietaryRestrictions', e.target.value ? e.target.value.split(',').map(s => s.trim()) : [])}
-                          className="bg-white/50"
+                          className="bg-muted/40"
                         />
                       </div>
                       <div className="space-y-2">
@@ -289,7 +303,7 @@ export default function RsvpPage() {
                           placeholder="Cadeira de rodas, bebê de colo, etc."
                           value={member.notes}
                           onChange={e => updateMember(member.id, 'notes', e.target.value)}
-                          className="bg-white/50"
+                          className="bg-muted/40"
                         />
                       </div>
                     </div>
@@ -308,12 +322,12 @@ export default function RsvpPage() {
         )}
 
         {step === 4 && (
-          <Card className="bg-white/60 backdrop-blur-xl border-white/40 shadow-2xl text-center py-12">
+          <Card className="bg-card border-border/70 shadow-xl text-center py-12">
             <CardContent className="space-y-6">
               <div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
                 <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
               </div>
-              <CardTitle className="text-4xl font-serif text-primary">RSVP Salvo com Sucesso!</CardTitle>
+              <CardTitle className="text-4xl font-display font-medium text-primary">RSVP Salvo com Sucesso!</CardTitle>
               <CardDescription className="text-lg">
                 Obrigado por responder. Suas informações foram registradas.
               </CardDescription>

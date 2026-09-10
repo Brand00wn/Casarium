@@ -83,27 +83,27 @@ export default function GiftGrid({
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {gifts.map((gift) => (
-          <Card key={gift.id} className="overflow-hidden flex flex-col hover:shadow-lg transition-shadow">
+          <Card key={gift.id} className="overflow-hidden flex flex-col rounded-2xl border-border/70 hover:shadow-xl transition-shadow">
             {gift.imageUrl ? (
-              <div className="w-full h-48 bg-gray-100">
+              <div className="w-full h-52 bg-muted">
                 <img src={gift.imageUrl} alt={gift.name} className="w-full h-full object-cover" />
               </div>
             ) : (
-              <div className="w-full h-48 bg-primary/10 flex items-center justify-center">
+              <div className="w-full h-52 bg-primary/10 flex items-center justify-center">
                 <GiftIcon className="w-16 h-16 text-primary/40" />
               </div>
             )}
-            <CardHeader>
-              <CardTitle className="text-xl">{gift.name}</CardTitle>
+            <CardHeader className="pb-2">
+              <CardTitle className="font-display text-2xl font-medium">{gift.name}</CardTitle>
             </CardHeader>
             <CardContent className="flex-grow">
-              <p className="text-sm text-gray-500 mb-4">{gift.description}</p>
+              <p className="text-sm text-muted-foreground font-light mb-4">{gift.description}</p>
               <p className="text-2xl font-bold text-primary">
                 {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(gift.price)}
               </p>
             </CardContent>
             <CardFooter>
-              <Button className="w-full" onClick={() => openCheckout(gift)}>
+              <Button className="w-full rounded-full h-11 text-sm font-semibold uppercase tracking-[0.1em]" onClick={() => openCheckout(gift)}>
                 Presentear
               </Button>
             </CardFooter>
