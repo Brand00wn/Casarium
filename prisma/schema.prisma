@@ -99,6 +99,8 @@ model Wedding {
   isSameLocation Boolean @default(false)
   // Mostrar endereço da recepção no site? (não exibir evita que pulem a cerimônia)
   showReceptionInfo Boolean @default(true)
+  // Revelar automaticamente X horas antes do evento (null = imediato pela flag)
+  receptionRevealHoursBefore Int?
 
   // RSVP
   rsvpDeadline DateTime?

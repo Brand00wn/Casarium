@@ -97,6 +97,8 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
       receptionDate: formatDateForInput(w.receptionDate),
       receptionLocation: w.receptionLocation || "",
       showReceptionInfo: w.showReceptionInfo ?? true,
+      revealDaysBefore: w.receptionRevealHoursBefore != null ? String(Math.floor(w.receptionRevealHoursBefore / 24)) : "",
+      revealHoursBefore: w.receptionRevealHoursBefore != null ? String(w.receptionRevealHoursBefore % 24) : "",
       receptionPlaceId: w.receptionPlaceId || "",
       dressCode: w.dressCode || "",
       primaryColor: w.primaryColor || "#5C8B6B",
@@ -254,7 +256,12 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
         ceremonyDate: toIso(data.ceremonyDate),
         receptionDate: toIso(data.receptionDate),
         rsvpDeadline: toIso(data.rsvpDeadline),
-        date: toIso(data.ceremonyDate) || wedding.date
+        date: toIso(data.ceremonyDate) || wedding.date,
+        // dias+horas → horas totais; vazio = revela desde já
+        receptionRevealHoursBefore:
+          data.revealDaysBefore === "" && data.revealHoursBefore === ""
+            ? null
+            : (parseInt(data.revealDaysBefore) || 0) * 24 + (parseInt(data.revealHoursBefore) || 0),
       }
 
       await updateWeddingDetails(weddingId, payload)
@@ -822,20 +829,42 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
               )}
 
               {receptionType === "different" && (
-                <div className="flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 p-4">
-                  <div>
-                    <Label className="font-semibold">Mostrar festa no site</Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Desligado, os convidados veem só a cerimônia — evita que pulem direto para a festa.
-                    </p>
+                <div className="space-y-3 rounded-lg border border-border/60 bg-muted/20 p-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <Label className="font-semibold">Mostrar festa no site</Label>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Desligado, os convidados veem só a cerimônia — evita que pulem direto para a festa.
+                      </p>
+                    </div>
+                    <Controller
+                      name="showReceptionInfo"
+                      control={control}
+                      render={({ field }) => (
+                        <Switch checked={!!field.value} onCheckedChange={field.onChange} />
+                      )}
+                    />
                   </div>
-                  <Controller
-                    name="showReceptionInfo"
-                    control={control}
-                    render={({ field }) => (
-                      <Switch checked={!!field.value} onCheckedChange={field.onChange} />
-                    )}
-                  />
+                  {watch("showReceptionInfo") && (
+                    <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-border/50 text-sm animate-in fade-in duration-300">
+                      <span className="text-muted-foreground">Revelar o endereço faltando</span>
+                      <Input
+                        type="number" min={0} max={365}
+                        {...register("revealDaysBefore")}
+                        placeholder="0"
+                        className="w-20 text-center bg-background h-9"
+                      />
+                      <span className="text-muted-foreground">dias e</span>
+                      <Input
+                        type="number" min={0} max={23}
+                        {...register("revealHoursBefore")}
+                        placeholder="0"
+                        className="w-20 text-center bg-background h-9"
+                      />
+                      <span className="text-muted-foreground">horas para a festa</span>
+                      <span className="text-xs text-muted-foreground w-full">Em branco = mostra desde já.</span>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>

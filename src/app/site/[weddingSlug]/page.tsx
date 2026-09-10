@@ -94,17 +94,20 @@ export default async function WeddingSitePage({ params }: { params: Promise<{ we
   const eventHour = eventDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
   const eventDateShort = eventDate.toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" })
 
-  const details: { icon: any, label: string, value: string }[] = []
-  if (wedding.dressCode) details.push({ icon: Shirt, label: "Traje", value: wedding.dressCode })
-  // Quando aparece junto ao traje — data/hora já estão no topo; seção só existe se houver traje
-  const whenCard = { icon: Clock, label: "Quando", value: `${eventDateShort} · ${eventHour}` }
+  const hasTraje = !!wedding.dressCode
 
   const first1 = wedding.partner1Name.split(" ")[0]
   const first2 = wedding.partner2Name.split(" ")[0]
   const padrinhos = wedding.partyMembers || []
   const vendors = wedding.vendorRecommendations || []
 
-  const showReception = wedding.showReceptionInfo !== false && !!wedding.receptionLocation;
+  const showReceptionSetting = wedding.showReceptionInfo !== false && !!wedding.receptionLocation;
+  // Revelação programada: esconde até faltar X horas (calculado ao vivo, sem cron)
+  const revealAt = wedding.receptionRevealHoursBefore != null
+    ? new Date(eventDate.getTime() - wedding.receptionRevealHoursBefore * 3600_000)
+    : null;
+  const showReception = showReceptionSetting && (!revealAt || Date.now() >= revealAt.getTime());
+  const receptionPending = showReceptionSetting && revealAt && Date.now() < revealAt.getTime();
 
   const parkingOf = (kind: "ceremony" | "reception") => {
     const raw = kind === "ceremony" ? wedding.ceremonyParkingType : wedding.receptionParkingType;
@@ -116,7 +119,8 @@ export default async function WeddingSitePage({ params }: { params: Promise<{ we
   const receptionParking = showReception ? parkingOf("reception") : null;
 
   const hasLogistics =
-    !!wedding.ceremonyLocation || showReception ||
+    hasTraje ||
+    !!wedding.ceremonyLocation || showReception || receptionPending ||
     !!ceremonyParking || !!receptionParking ||
     (wedding.hasAccommodationTips && wedding.accommodationTips) ||
     vendors.length > 0
@@ -185,28 +189,7 @@ export default async function WeddingSitePage({ params }: { params: Promise<{ we
         </section>
       )}
 
-      {/* Detalhes — quando + traje (endereços ficam só em Informações) */}
-      {details.length > 0 && (
-        <section className="bg-card border-y border-border/60">
-          <div className="mx-auto max-w-5xl px-4 py-20">
-            <div className="text-center space-y-3 mb-12">
-              <Eyebrow>O grande dia</Eyebrow>
-              <h2 className="font-display text-4xl md:text-5xl font-medium">Detalhes</h2>
-            </div>
-            <div className={`grid gap-6 max-w-3xl mx-auto ${details.length > 1 ? "md:grid-cols-2" : ""}`}>
-              {[whenCard, ...details].map((d, i) => (
-                <div key={i} className="rounded-2xl border border-border/70 bg-background p-8 text-center shadow-sm">
-                  <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                    <d.icon className="w-5 h-5 text-primary" />
-                  </div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">{d.label}</p>
-                  <p className="mt-2 font-display text-2xl">{d.value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
+      {/* O grande dia — quando, traje, locais e infos, tudo junto */}
 
       {/* Padrinhos */}
       {padrinhos.length > 0 && (
@@ -243,15 +226,43 @@ export default async function WeddingSitePage({ params }: { params: Promise<{ we
         </section>
       )}
 
-      {/* Informações úteis */}
+      {/* O grande dia — quando, traje, locais e infos, tudo numa seção só */}
       {hasLogistics && (
         <section className="bg-card border-y border-border/60">
           <div className="mx-auto max-w-5xl px-4 py-20">
             <div className="text-center space-y-3 mb-12">
-              <Eyebrow>Informações úteis</Eyebrow>
+              <Eyebrow>O grande dia</Eyebrow>
               <h2 className="font-display text-4xl md:text-5xl font-medium">Tudo para você chegar bem</h2>
             </div>
             <div className="grid gap-6 md:grid-cols-2">
+              <div className="rounded-2xl border border-border/70 bg-background p-8 text-center shadow-sm">
+                <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                  <Clock className="w-5 h-5 text-primary" />
+                </div>
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">Quando</p>
+                <p className="mt-2 font-display text-2xl leading-snug">{eventDateShort} · {eventHour}</p>
+              </div>
+
+              {hasTraje && (
+                <div className="rounded-2xl border border-border/70 bg-background p-8 text-center shadow-sm">
+                  <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                    <Shirt className="w-5 h-5 text-primary" />
+                  </div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">Traje</p>
+                  <p className="mt-2 font-display text-2xl leading-snug">{wedding.dressCode}</p>
+                </div>
+              )}
+
+              {receptionPending && (
+                <div className="rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-8 text-center shadow-sm">
+                  <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                    <Gift className="w-5 h-5 text-primary" />
+                  </div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">Recepção</p>
+                  <p className="mt-2 font-display text-2xl leading-snug">Surpresa em breve 🎉</p>
+                  <p className="mt-2 text-sm text-muted-foreground">O endereço da festa será revelado aqui pertinho da data.</p>
+                </div>
+              )}
               {wedding.ceremonyLocation && (
                 <div className="rounded-2xl border border-border/70 bg-background p-8 text-center shadow-sm">
                   <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
