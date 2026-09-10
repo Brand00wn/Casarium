@@ -146,7 +146,9 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
     if (v instanceof Date) return v.toISOString();
     if (Array.isArray(v)) return `[${v.map(stable).join(",")}]`;
     if (typeof v === "object") {
-      return `{${Object.keys(v).sort().map(k => `${JSON.stringify(k)}:${stable(v[k])}`).join(",")}}`;
+      // "id" é gerado pelo servidor (fornecedores/membros novos) — ignorar,
+      // senão o eco do próprio save pareceria mudança externa e remontaria o form.
+      return `{${Object.keys(v).filter(k => k !== "id").sort().map(k => `${JSON.stringify(k)}:${stable(v[k])}`).join(",")}}`;
     }
     return JSON.stringify(v);
   };
@@ -197,11 +199,13 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
 
   // Salva o form atual e sincroniza a baseline SEM reconstruir os inputs
   // (reset com os próprios valores: limpa o dirty sem mexer no foco).
-  const saveNow = async () => {
+  // Sem alteração pendente, não faz nada — abrir um select não é motivo de save.
+  const saveNow = async (force = false) => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current)
       timeoutRef.current = null
     }
+    if (!force && !dirtyRef.current) return
     if (savingRef.current) {
       queuedRef.current = true
       return
@@ -275,7 +279,7 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
 
   return (
     <form
-      onSubmit={(e) => { e.preventDefault(); void saveNow(); }}
+      onSubmit={(e) => { e.preventDefault(); void saveNow(true); }}
       onBlur={() => scheduleSave()}
       className="space-y-6 pb-8 relative"
     >
@@ -385,7 +389,7 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
                       const previous = watch("coverImageUrl");
                       const next = res[0].url;
                       setValue("coverImageUrl", next);
-                      scheduleSave();
+                      void saveNow(true);
                       if (previous && previous !== next) {
                         try {
                           await removeWeddingCoverImage(weddingId, previous);
@@ -499,7 +503,7 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
                                      onChange={(name, guestId) => {
                                        field.onChange(name);
                                        setValue(`partyMembers.${index}.guestId` as const, guestId, { shouldDirty: true, shouldValidate: true });
-                                       scheduleSave();
+                                       void saveNow(true);
                                      }}
                                   />
                                 )}
@@ -606,7 +610,7 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
                                       content={{ button: "Enviar foto" }}
                                       onClientUploadComplete={(res) => {
                                         field.onChange(res[0].url);
-                                        scheduleSave();
+                                        void saveNow(true);
                                         toast.success("Foto enviada! Salvando...");
                                       }}
                                       onUploadError={(error: Error) => {
