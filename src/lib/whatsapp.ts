@@ -9,8 +9,13 @@ function getEvolutionConfig() {
 }
 
 function formatPhone(phone: string) {
-  // Formata o número (remover + e espaços se houver, garantindo formato Evolution)
-  return phone.replace(/\D/g, "");
+  // Só dígitos
+  let digits = phone.replace(/\D/g, "");
+  // Brasil sem DDI (10 dígitos fixo ou 11 com o 9) → adiciona 55
+  if ((digits.length === 10 || digits.length === 11) && !digits.startsWith("55")) {
+    digits = `55${digits}`;
+  }
+  return digits;
 }
 
 async function postEvolution(path: string, body: Record<string, unknown>): Promise<WhatsAppResult> {
