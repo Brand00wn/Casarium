@@ -4,6 +4,7 @@ import { z } from "zod";
 import * as cheerio from "cheerio";
 import { prisma } from "@/lib/prisma";
 import { getGoogleModel, toAiErrorMessage } from "@/lib/ai-model";
+import { rehostImageToUploadthing } from "@/lib/uploadthing-manage";
 
 export async function POST(req: Request) {
   try {
@@ -114,7 +115,11 @@ Sempre responda ao usuário em 'responseText' sendo extremamente educado, confir
         }
 
         const safeSearchTerm = (result.object.englishSearchTerm || "wedding gift").replace(/[^a-zA-Z0-9 ]/g, "").trim();
-        const finalImage = image || `https://image.pollinations.ai/prompt/professional%20product%20photography%20of%20${encodeURIComponent(safeSearchTerm)}%2C%20white%20background%2C%20high%20quality?width=600&height=600&nologo=true`;
+        const scrapedOrFallback = image || `https://image.pollinations.ai/prompt/professional%20product%20photography%20of%20${encodeURIComponent(safeSearchTerm)}%2C%20white%20background%2C%20high%20quality?width=600&height=600&nologo=true`;
+
+        // Re-hospeda no UploadThing para a imagem não quebrar depois
+        // (hotlink de loja e pollinations são instáveis)
+        const finalImage = await rehostImageToUploadthing(scrapedOrFallback);
 
         // 3. Save to database
         const gift = await prisma.gift.create({

@@ -6,8 +6,9 @@ const f = createUploadthing();
 export const ourFileRouter = {
   imageUploader: f({ image: { maxFileSize: "4MB", maxFileCount: 1 } })
     .middleware(async ({ req }) => {
-      // Temporarily removed auth to debug if this is the cause
-      return { userId: "temp-user-id" };
+      const user = await getCurrentUser();
+      if (!user) throw new Error("Não autenticado");
+      return { userId: user.id };
     })
     .onUploadComplete(async ({ metadata, file }) => {
       console.log("Upload complete for userId:", metadata.userId);

@@ -4,7 +4,7 @@ import { use, useEffect, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { Plus, Trash2, Gift, Edit2, ListOrdered, Loader2, ChevronsUpDown, Check, Sparkles } from "lucide-react";
 import { toast } from "sonner";
-import { getGifts, createGift, deleteGift, getTransactions, updateGift, seedDefaultGifts, deleteMultipleGifts } from "@/app/actions/gifts";
+import { getGifts, createGift, deleteGift, getTransactions, updateGift, seedDefaultGifts, deleteMultipleGifts, removeGiftImage } from "@/app/actions/gifts";
 import { getGiftCategories } from "@/app/actions/gift-categories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +32,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { UploadButton } from "@/lib/uploadthing";
+import { SafeImage } from "@/components/ui/safe-image";
+import { ImageAuditButton } from "./image-audit-button";
 import { AIGiftAssistant } from "./ai-assistant";
 
 export default function GiftsDashboardPage({ params }: { params: Promise<{ weddingId: string }> }) {
@@ -226,11 +228,22 @@ export default function GiftsDashboardPage({ params }: { params: Promise<{ weddi
                     {watch("imageUrl") ? (
                       <div className="relative rounded-md overflow-hidden h-32 w-full border">
                         <img src={watch("imageUrl")} alt="Preview" className="object-cover w-full h-full" />
-                        <Button 
-                          variant="destructive" 
-                          size="icon" 
+                        <Button
+                          variant="destructive"
+                          size="icon"
                           className="absolute top-2 right-2 w-8 h-8"
-                          onClick={() => setValue("imageUrl", "")}
+                          onClick={async () => {
+                            const current = watch("imageUrl");
+                            setValue("imageUrl", "");
+                            if (current) {
+                              try {
+                                await removeGiftImage(weddingId, editingGift?.id || null, current);
+                                toast.success("Imagem excluída.");
+                              } catch {
+                                toast.error("Não foi possível excluir o arquivo.");
+                              }
+                            }
+                          }}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -238,8 +251,19 @@ export default function GiftsDashboardPage({ params }: { params: Promise<{ weddi
                     ) : (
                       <UploadButton
                         endpoint="imageUploader"
-                        onClientUploadComplete={(res) => {
-                          setValue("imageUrl", res[0].url);
+                        onClientUploadComplete={async (res) => {
+                          const previous = watch("imageUrl");
+                          const next = res[0].url;
+                          setValue("imageUrl", next);
+                          // Substituição: apaga o arquivo antigo do UploadThing
+                          // (sem limpar o campo — o salvar grava a nova URL)
+                          if (previous && previous !== next) {
+                            try {
+                              await removeGiftImage(weddingId, editingGift?.id || null, previous, { clearField: false });
+                            } catch {
+                              console.error("Falha ao apagar imagem antiga");
+                            }
+                          }
                           toast.success("Imagem enviada com sucesso!");
                         }}
                         onUploadError={(error: Error) => {
@@ -361,6 +385,7 @@ export default function GiftsDashboardPage({ params }: { params: Promise<{ weddi
             <h2 className="text-xl font-semibold">Lista de Presentes</h2>
             
             <div className="flex items-center gap-2">
+              <ImageAuditButton weddingSlug={weddingId} />
               <Label className="text-sm text-muted-foreground whitespace-nowrap">Filtrar Categoria:</Label>
               <select 
                 className="flex h-9 w-full sm:w-[200px] items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
@@ -414,7 +439,7 @@ export default function GiftsDashboardPage({ params }: { params: Promise<{ weddi
                         </TableCell>
                         <TableCell>
                         {gift.imageUrl ? (
-                          <img src={gift.imageUrl} alt={gift.name} className="w-12 h-12 object-cover rounded-md" />
+                          <SafeImage src={gift.imageUrl} alt={gift.name} className="w-12 h-12 rounded-md" imgClassName="w-12 h-12 object-cover rounded-md" />
                         ) : (
                           <div className="w-12 h-12 bg-muted rounded-md flex items-center justify-center">
                             <Gift className="w-6 h-6 text-muted-foreground" />

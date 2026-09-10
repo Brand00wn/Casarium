@@ -3,8 +3,25 @@
 import { prisma } from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/session"
 import { revalidatePath } from "next/cache"
+import { deleteUploadthingUrls } from "@/lib/uploadthing-manage"
 import { syncPartyMemberToGuest } from "./party-guest-sync"
 import { recalculateRelativeDates } from "./checklist"
+
+/** Apaga a foto de capa do UploadThing (se for de lá) e limpa o campo. */
+export async function removeWeddingCoverImage(weddingId: string, imageUrl: string) {
+  const user = await getCurrentUser()
+  if (!user) throw new Error("Não autorizado")
+  try {
+    await deleteUploadthingUrls([imageUrl]);
+  } catch (e: any) {
+    console.error("Falha ao apagar capa do UploadThing:", e.message);
+  }
+  await prisma.wedding.update({
+    where: { slug: weddingId },
+    data: { coverImageUrl: null },
+  });
+  return { success: true };
+}
 
 export async function getWeddingDetails(weddingId: string) {
   const user = await getCurrentUser()

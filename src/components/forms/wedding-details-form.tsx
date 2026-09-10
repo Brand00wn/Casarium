@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { useForm, Controller, useFieldArray } from "react-hook-form"
 import { toast } from "sonner"
 import { Loader2, Heart, Calendar, Palette, Globe, CheckCircle2, Check, AlertCircle } from "lucide-react"
-import { updateWeddingDetails } from "@/app/actions/wedding-details"
+import { updateWeddingDetails, removeWeddingCoverImage } from "@/app/actions/wedding-details"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { LocationAutocomplete } from "@/components/ui/location-autocomplete"
 import { GuestCombobox } from "@/components/forms/guest-combobox"
 import { Plus, Trash2, Eye } from "lucide-react"
+import { UploadButton } from "@/lib/uploadthing"
 
 export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddingId: string }) {
   const [isLoading, setIsLoading] = useState(false)
@@ -275,9 +276,56 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
                 </div>
               </div>
               <div className="space-y-3">
-                <Label className="font-semibold text-foreground/80">Foto de Capa (Link)</Label>
-                <Input {...register("coverImageUrl")} placeholder="https://..." className="bg-background" />
-                <p className="text-xs text-muted-foreground">Cole a URL de uma foto do casal para o cabeçalho do site.</p>
+                <Label className="font-semibold text-foreground/80">Foto de Capa</Label>
+                {watch("coverImageUrl") ? (
+                  <div className="relative rounded-lg overflow-hidden h-48 w-full border">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={watch("coverImageUrl")} alt="Capa" className="object-cover w-full h-full" />
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-2 right-2 w-8 h-8"
+                      title="Excluir capa"
+                      onClick={async () => {
+                        const current = watch("coverImageUrl");
+                        setValue("coverImageUrl", "");
+                        if (current) {
+                          try {
+                            await removeWeddingCoverImage(weddingId, current);
+                            toast.success("Capa excluída.");
+                          } catch {
+                            toast.error("Não foi possível excluir o arquivo.");
+                          }
+                        }
+                      }}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <UploadButton
+                    endpoint="imageUploader"
+                    onClientUploadComplete={async (res) => {
+                      const previous = watch("coverImageUrl");
+                      const next = res[0].url;
+                      setValue("coverImageUrl", next);
+                      if (previous && previous !== next) {
+                        try {
+                          await removeWeddingCoverImage(weddingId, previous);
+                        } catch {
+                          console.error("Falha ao apagar capa antiga");
+                        }
+                      }
+                      toast.success("Capa enviada! Salve as alterações.");
+                    }}
+                    onUploadError={(error: Error) => {
+                      toast.error(`Erro ao enviar: ${error.message}`);
+                    }}
+                  />
+                )}
+                <Input {...register("coverImageUrl")} placeholder="https://... (ou envie acima)" className="bg-background" />
+                <p className="text-xs text-muted-foreground">Envie uma foto do casal ou cole a URL. Ela aparece no topo do site.</p>
               </div>
             </CardContent>
           </Card>

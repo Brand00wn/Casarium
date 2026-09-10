@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { SafeImage } from "@/components/ui/safe-image";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { QrCode, CreditCard, Gift as GiftIcon } from "lucide-react";
 
@@ -114,9 +115,7 @@ export default function GiftGrid({
         {visibleGifts.map((gift) => (
           <Card key={gift.id} className="group overflow-hidden flex flex-col rounded-2xl border-border/70 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
             {gift.imageUrl ? (
-              <div className="w-full h-52 bg-muted">
-                <img src={gift.imageUrl} alt={gift.name} className="w-full h-full object-cover" />
-              </div>
+              <SafeImage src={gift.imageUrl} alt={gift.name} className="w-full h-52 bg-muted" imgClassName="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-52 bg-primary/10 flex items-center justify-center">
                 <GiftIcon className="w-16 h-16 text-primary/40" />

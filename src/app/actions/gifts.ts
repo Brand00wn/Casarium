@@ -2,6 +2,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { requirePermission } from "@/lib/session";
+import { deleteUploadthingUrls } from "@/lib/uploadthing-manage";
 import { ensureDefaultCategories } from "./gift-categories";
 
 export async function createGift(weddingSlug: string, data: { name: string; description?: string; price: number; imageUrl?: string; quotaCount?: number; categoryIds?: string[] }) {
@@ -47,12 +49,70 @@ export async function updateGift(giftId: string, data: { name?: string; descript
   return gift;
 }
 
+/**
+ * Remove a imagem de um presente: apaga o arquivo do UploadThing (se for de lá)
+ * e limpa o campo. Usado ao excluir/substituir pelo formulário.
+ */
+export async function removeGiftImage(weddingSlug: string, giftId: string | null, imageUrl: string, options?: { clearField?: boolean }) {
+  await requirePermission(weddingSlug, "canManageGuests");
+  try {
+    await deleteUploadthingUrls([imageUrl]);
+  } catch (e: any) {
+    // Sem token do UT ou falha de rede: limpa o campo mesmo assim
+    console.error("Falha ao apagar imagem do UploadThing:", e.message);
+  }
+  if (giftId && options?.clearField !== false) {
+    await prisma.gift.update({
+      where: { id: giftId },
+      data: { imageUrl: null },
+    });
+    revalidatePath(`/${weddingSlug}/presentes`);
+  }
+  return { success: true };
+}
+
+/** Checa quais presentes têm imagem quebrada (HEAD request com timeout). */
+export async function auditGiftImages(weddingSlug: string) {
+  await requirePermission(weddingSlug, "canManageGuests");
+  const wedding = await prisma.wedding.findUnique({ where: { slug: weddingSlug } });
+  if (!wedding) throw new Error("Casamento não encontrado");
+
+  const gifts = await prisma.gift.findMany({
+    where: { weddingId: wedding.id, imageUrl: { not: null } },
+    select: { id: true, name: true, imageUrl: true },
+    orderBy: { name: "asc" },
+  });
+
+  const broken: { id: string, name: string, imageUrl: string, status: string }[] = [];
+
+  await Promise.all(gifts.map(async (g) => {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      const res = await fetch(g.imageUrl!, { method: "HEAD", signal: ctrl.signal });
+      clearTimeout(timer);
+      if (!res.ok) broken.push({ id: g.id, name: g.name, imageUrl: g.imageUrl!, status: `HTTP ${res.status}` });
+    } catch (e: any) {
+      broken.push({ id: g.id, name: g.name, imageUrl: g.imageUrl!, status: e.name === "AbortError" ? "timeout" : "inacessível" });
+    }
+  }));
+
+  return { total: gifts.length, broken };
+}
+
 export async function deleteGift(giftId: string) {
-  const gift = await prisma.gift.delete({
+  const gift = await prisma.gift.findUnique({ where: { id: giftId } });
+  if (!gift) throw new Error("Presente não encontrado");
+  try {
+    await deleteUploadthingUrls([gift.imageUrl]);
+  } catch (e) {
+    console.error("Falha ao apagar imagem do UploadThing:", e);
+  }
+  const deleted = await prisma.gift.delete({
     where: { id: giftId },
   });
-  revalidatePath(`/${gift.weddingId}/presentes`);
-  return gift;
+  revalidatePath(`/${deleted.weddingId}/presentes`);
+  return deleted;
 }
 
 export async function deleteMultipleGifts(giftIds: string[], weddingSlug: string) {
