@@ -147,6 +147,9 @@ model WeddingMessagingConfig {
   reminderDaysBefore   Int       @default(7)
   reminderIntervalDays Int       @default(3)
   lastReminderAt       DateTime?
+  // Mensagens (com variáveis {nome} {noivos} {link} {codigo} {qtd} {convite_vale} {dias})
+  inviteTemplate       String?   @db.Text
+  reminderTemplate     String?   @db.Text
   updatedAt            DateTime  @updatedAt
 }
 

@@ -36,11 +36,23 @@ export async function updateMessagingConfig(weddingSlug: string, data: {
   reminderEnabled?: boolean;
   reminderDaysBefore?: number;
   reminderIntervalDays?: number;
+  inviteTemplate?: string | null;
+  reminderTemplate?: string | null;
 }) {
   const wedding = await requireStaff(weddingSlug);
 
   const clamp = (v: number | undefined, min: number, max: number, fallback: number) =>
     v === undefined || Number.isNaN(v) ? fallback : Math.min(max, Math.max(min, Math.round(v)));
+
+  const cleanTemplate = (v: string | null | undefined) => {
+    if (v === undefined) return undefined;
+    if (v === null) return null;
+    const t = v.trim().slice(0, 2000);
+    return t === "" ? null : t;
+  };
+
+  const inviteTemplate = cleanTemplate(data.inviteTemplate);
+  const reminderTemplate = cleanTemplate(data.reminderTemplate);
 
   return prisma.weddingMessagingConfig.upsert({
     where: { weddingId: wedding.id },
@@ -52,6 +64,8 @@ export async function updateMessagingConfig(weddingSlug: string, data: {
       reminderEnabled: data.reminderEnabled ?? DEFAULT_MESSAGING.reminderEnabled,
       reminderDaysBefore: clamp(data.reminderDaysBefore, 1, 365, DEFAULT_MESSAGING.reminderDaysBefore),
       reminderIntervalDays: clamp(data.reminderIntervalDays, 1, 60, DEFAULT_MESSAGING.reminderIntervalDays),
+      ...(inviteTemplate !== undefined && { inviteTemplate }),
+      ...(reminderTemplate !== undefined && { reminderTemplate }),
     },
     update: {
       ...(data.autoInviteEnabled !== undefined && { autoInviteEnabled: data.autoInviteEnabled }),
@@ -59,6 +73,8 @@ export async function updateMessagingConfig(weddingSlug: string, data: {
       ...(data.reminderEnabled !== undefined && { reminderEnabled: data.reminderEnabled }),
       ...(data.reminderDaysBefore !== undefined && { reminderDaysBefore: clamp(data.reminderDaysBefore, 1, 365, DEFAULT_MESSAGING.reminderDaysBefore) }),
       ...(data.reminderIntervalDays !== undefined && { reminderIntervalDays: clamp(data.reminderIntervalDays, 1, 60, DEFAULT_MESSAGING.reminderIntervalDays) }),
+      ...(inviteTemplate !== undefined && { inviteTemplate }),
+      ...(reminderTemplate !== undefined && { reminderTemplate }),
     },
   });
 }

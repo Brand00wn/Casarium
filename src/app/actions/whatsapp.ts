@@ -4,6 +4,13 @@ import { prisma } from "@/lib/prisma";
 import { getSiteUrl } from "@/lib/site-url";
 import { sendWhatsAppMessage, sendWhatsAppImage } from "@/lib/whatsapp";
 import { guestCodeQrDataUrl } from "@/lib/guest-qr";
+import {
+  DEFAULT_INVITE_TEMPLATE,
+  DEFAULT_REMINDER_TEMPLATE,
+  daysLabel,
+  renderMessageTemplate,
+  type TemplateVars,
+} from "@/lib/message-templates";
 import { MessageStatus, MessageType, WhatsAppStatus } from "@prisma/client";
 
 export type DeliveryResult = { ok: true } | { ok: false, error: string };
@@ -28,7 +35,7 @@ async function loadGuest(guestId: string) {
   return prisma.guest.findUnique({
     where: { id: guestId },
     include: {
-      wedding: true,
+      wedding: { include: { messagingConfig: true } },
       family: { include: { guests: { select: { id: true, rsvpStatus: true } } } },
     },
   });
@@ -36,19 +43,16 @@ async function loadGuest(guestId: string) {
 
 type LoadedGuest = NonNullable<Awaited<ReturnType<typeof loadGuest>>>;
 
-function inviteText(guest: LoadedGuest, rsvpLink: string, familySize: number) {
-  return `Olá ${guest.name}! Você foi convidado para o casamento de ${guest.wedding.partner1Name} e ${guest.wedding.partner2Name}.
-
-Confirme sua presença no link: ${rsvpLink}
-${familySize > 1 ? `Este convite vale para ${familySize} pessoas. ` : ""}Seu código é: ${guest.token}`;
-}
-
-function reminderText(guest: LoadedGuest, rsvpLink: string, daysLeft: number) {
-  const when = daysLeft > 1 ? `Faltam ${daysLeft} dias` : daysLeft === 1 ? "É amanhã" : "É hoje";
-  return `Olá ${guest.name}! ${when} para o casamento de ${guest.wedding.partner1Name} e ${guest.wedding.partner2Name} e ainda não registramos sua confirmação. 💍
-
-Confirme aqui: ${rsvpLink}
-Seu código é: ${guest.token}`;
+function templateVars(guest: LoadedGuest, rsvpLink: string, familySize: number, daysLeft: number): TemplateVars {
+  return {
+    nome: guest.name,
+    noivos: `${guest.wedding.partner1Name} e ${guest.wedding.partner2Name}`,
+    link: rsvpLink,
+    codigo: guest.token || "",
+    qtd: familySize,
+    convite_vale: familySize > 1 ? `Este convite vale para ${familySize} pessoas. ` : "",
+    dias: daysLabel(daysLeft),
+  };
 }
 
 async function sendTextAndQr(guest: LoadedGuest, text: string, qrCaption: string): Promise<DeliveryResult> {
@@ -79,10 +83,11 @@ export async function deliverInvite(guestId: string): Promise<DeliveryResult & {
   const siteUrl = await getSiteUrl();
   const rsvpLink = `${siteUrl}/site/${guest.wedding.slug}/rsvp?token=${guest.token}`;
   const familySize = guest.family ? guest.family.guests.length : 1;
+  const template = guest.wedding.messagingConfig?.inviteTemplate || DEFAULT_INVITE_TEMPLATE;
 
   const result = await sendTextAndQr(
     guest,
-    inviteText(guest, rsvpLink, familySize),
+    renderMessageTemplate(template, templateVars(guest, rsvpLink, familySize, 0)),
     `🎟️ Este é seu QR Code de entrada${familySize > 1 ? ` (vale para ${familySize} pessoas)` : ""}. Apresente na portaria do evento.`
   );
 
@@ -104,10 +109,11 @@ export async function deliverReminder(guestId: string, daysLeft: number): Promis
   const siteUrl = await getSiteUrl();
   const rsvpLink = `${siteUrl}/site/${guest.wedding.slug}/rsvp?token=${guest.token}`;
   const familySize = guest.family ? guest.family.guests.length : 1;
+  const template = guest.wedding.messagingConfig?.reminderTemplate || DEFAULT_REMINDER_TEMPLATE;
 
   const result = await sendTextAndQr(
     guest,
-    reminderText(guest, rsvpLink, daysLeft),
+    renderMessageTemplate(template, templateVars(guest, rsvpLink, familySize, daysLeft)),
     `🎟️ Seu QR Code de entrada${familySize > 1 ? ` (vale para ${familySize} pessoas)` : ""}. Apresente na portaria.`
   );
 

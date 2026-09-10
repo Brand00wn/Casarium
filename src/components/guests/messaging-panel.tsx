@@ -13,7 +13,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Send, BellRing, Loader2 } from "lucide-react";
+import { Send, BellRing, Loader2, RotateCcw, Eye } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  DEFAULT_INVITE_TEMPLATE,
+  DEFAULT_REMINDER_TEMPLATE,
+  PREVIEW_VARS,
+  TEMPLATE_VARS,
+  renderMessageTemplate,
+} from "@/lib/message-templates";
 import {
   getMessagingConfig,
   updateMessagingConfig,
@@ -31,6 +39,7 @@ export function MessagingPanel({ weddingSlug }: { weddingSlug: string }) {
   const [sending, setSending] = useState<"invites" | "reminders" | null>(null);
   const [result, setResult] = useState<{ kind: string, summary: Summary } | null>(null);
   const [error, setError] = useState("");
+  const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
     getMessagingConfig(weddingSlug)
@@ -49,6 +58,8 @@ export function MessagingPanel({ weddingSlug }: { weddingSlug: string }) {
         reminderEnabled: cfg.reminderEnabled,
         reminderDaysBefore: Number(cfg.reminderDaysBefore),
         reminderIntervalDays: Number(cfg.reminderIntervalDays),
+        inviteTemplate: cfg.inviteTemplate ?? null,
+        reminderTemplate: cfg.reminderTemplate ?? null,
       });
       setCfg(updated);
     } catch (e: any) {
@@ -158,6 +169,72 @@ export function MessagingPanel({ weddingSlug }: { weddingSlug: string }) {
               {sending === "reminders" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <BellRing className="w-4 h-4 mr-2" />}
               {sending === "reminders" ? "Enviando..." : "Lembrar pendentes agora"}
             </Button>
+          </div>
+        </div>
+
+        <div className="space-y-4 p-4 rounded-lg border">
+          <div className="flex items-center justify-between">
+            <Label className="font-semibold">Textos das mensagens</Label>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowPreview(v => !v)}
+              className="gap-1.5 text-xs"
+            >
+              <Eye className="w-3.5 h-3.5" /> {showPreview ? "Ocultar prévia" : "Ver prévia"}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Variáveis: {TEMPLATE_VARS.map(v => `${v.key} (${v.label})`).join(" · ")}
+          </p>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Convite</Label>
+              <Button
+                type="button" variant="ghost" size="sm"
+                onClick={() => setCfg({ ...cfg, inviteTemplate: DEFAULT_INVITE_TEMPLATE })}
+                className="gap-1 text-xs h-7"
+              >
+                <RotateCcw className="w-3 h-3" /> Padrão
+              </Button>
+            </div>
+            <Textarea
+              rows={5}
+              value={cfg.inviteTemplate ?? DEFAULT_INVITE_TEMPLATE}
+              onChange={(e) => setCfg({ ...cfg, inviteTemplate: e.target.value })}
+              className="font-mono text-sm"
+            />
+            {showPreview && (
+              <div className="p-3 rounded-md bg-green-50 border border-green-200 text-sm whitespace-pre-wrap">
+                {renderMessageTemplate(cfg.inviteTemplate ?? DEFAULT_INVITE_TEMPLATE, PREVIEW_VARS)}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Lembrete de confirmação</Label>
+              <Button
+                type="button" variant="ghost" size="sm"
+                onClick={() => setCfg({ ...cfg, reminderTemplate: DEFAULT_REMINDER_TEMPLATE })}
+                className="gap-1 text-xs h-7"
+              >
+                <RotateCcw className="w-3 h-3" /> Padrão
+              </Button>
+            </div>
+            <Textarea
+              rows={5}
+              value={cfg.reminderTemplate ?? DEFAULT_REMINDER_TEMPLATE}
+              onChange={(e) => setCfg({ ...cfg, reminderTemplate: e.target.value })}
+              className="font-mono text-sm"
+            />
+            {showPreview && (
+              <div className="p-3 rounded-md bg-amber-50 border border-amber-200 text-sm whitespace-pre-wrap">
+                {renderMessageTemplate(cfg.reminderTemplate ?? DEFAULT_REMINDER_TEMPLATE, PREVIEW_VARS)}
+              </div>
+            )}
           </div>
         </div>
 
