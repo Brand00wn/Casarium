@@ -6,10 +6,10 @@ import { sendWhatsAppMessage, sendWhatsAppImage } from "@/lib/whatsapp";
 import { guestCodeQrDataUrl } from "@/lib/guest-qr";
 import { WhatsAppStatus } from "@prisma/client";
 
-export async function sendInvite(weddingId: string, guestId: string) {
+export async function sendInvite(weddingSlugOrId: string, guestId: string) {
   try {
     const guest = await prisma.guest.findUnique({
-      where: { id: guestId, weddingId },
+      where: { id: guestId },
       include: {
         wedding: true,
         family: { include: { guests: { select: { id: true } } } },
@@ -17,6 +17,11 @@ export async function sendInvite(weddingId: string, guestId: string) {
     });
 
     if (!guest) {
+      return { success: false, error: "Guest not found" };
+    }
+
+    // A tela passa o slug da rota — valida que o convidado é deste casamento
+    if (guest.weddingId !== weddingSlugOrId && guest.wedding.slug !== weddingSlugOrId) {
       return { success: false, error: "Guest not found" };
     }
 
