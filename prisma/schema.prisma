@@ -178,6 +178,7 @@ model WeddingPartyMember {
   isMentioned  Boolean             @default(true)
   hasTribute   Boolean             @default(false)
   attireColor  String?
+  photoUrl     String?
   accompanies  String?
   order        Int                 @default(0)
   guestId      String?             @unique

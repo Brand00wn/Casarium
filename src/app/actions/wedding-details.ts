@@ -147,6 +147,7 @@ export async function updateWeddingDetails(weddingId: string, data: any) {
             side: m.side,
             name: m.name,
             attireColor: m.attireColor || null,
+            photoUrl: m.photoUrl || null,
             isDeceased: m.isDeceased ?? false,
             isMentioned: m.isMentioned ?? true,
             hasTribute: m.hasTribute ?? false,

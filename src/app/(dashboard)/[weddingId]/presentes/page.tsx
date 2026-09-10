@@ -48,6 +48,7 @@ export default function GiftsDashboardPage({ params }: { params: Promise<{ weddi
   const [selectedGifts, setSelectedGifts] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isPending, startTransition] = useTransition();
+  const [savingGift, setSavingGift] = useState(false);
   
   const { register, handleSubmit, reset, setValue, watch } = useForm();
   
@@ -96,12 +97,14 @@ export default function GiftsDashboardPage({ params }: { params: Promise<{ weddi
   };
 
   const onSubmit = async (data: any) => {
+    if (savingGift) return;
+    setSavingGift(true);
     try {
       const payload = {
         name: data.name,
         description: data.description,
         price: parseFloat(data.price),
-        imageUrl: data.imageUrl,
+        imageUrl: data.imageUrl || null,
         quotaCount: parseInt(data.quotaCount) || 1,
         categoryIds: selectedCategories,
       };
@@ -117,8 +120,11 @@ export default function GiftsDashboardPage({ params }: { params: Promise<{ weddi
       reset();
       setSelectedCategories([]);
       loadData();
-    } catch (error) {
-      toast.error("Erro ao salvar presente.");
+    } catch (error: any) {
+      console.error(error);
+      toast.error("Erro ao salvar presente: " + (error.message || "tente novamente."));
+    } finally {
+      setSavingGift(false);
     }
   };
 
@@ -249,9 +255,10 @@ export default function GiftsDashboardPage({ params }: { params: Promise<{ weddi
                         </Button>
                       </div>
                     ) : (
-                      <UploadButton
-                        endpoint="imageUploader"
-                        onClientUploadComplete={async (res) => {
+                      <div className="space-y-2">
+                        <UploadButton
+                          endpoint="imageUploader"
+                          onClientUploadComplete={async (res) => {
                           const previous = watch("imageUrl");
                           const next = res[0].url;
                           setValue("imageUrl", next);
@@ -270,6 +277,16 @@ export default function GiftsDashboardPage({ params }: { params: Promise<{ weddi
                           toast.error(`Erro ao enviar: ${error.message}`);
                         }}
                       />
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">ou cole o link:</span>
+                          <Input
+                            placeholder="https://..."
+                            value={watch("imageUrl") || ""}
+                            onChange={(e) => setValue("imageUrl", e.target.value)}
+                            className="h-9 text-sm"
+                          />
+                        </div>
+                      </div>
                     )}
                     <Input type="hidden" {...register("imageUrl")} />
                   </div>
@@ -340,7 +357,9 @@ export default function GiftsDashboardPage({ params }: { params: Promise<{ weddi
                       </PopoverContent>
                     </Popover>
                   </div>
-                  <Button type="submit" className="w-full">Salvar</Button>
+                  <Button type="submit" className="w-full" disabled={savingGift}>
+                    {savingGift ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : "Salvar"}
+                  </Button>
                 </form>
               </DialogContent>
             </Dialog>

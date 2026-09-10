@@ -354,7 +354,7 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Flagueie homenagens póstumas ou oculte do site caso necessário.</span>
-                  <Button type="button" variant="outline" size="sm" onClick={() => appendParty({ clientId: crypto.randomUUID(), type: "FATHER", side: "BOTH", name: "", pairedWithId: "none", attireColor: "", isDeceased: false, isMentioned: true, hasTribute: false })}>
+                  <Button type="button" variant="outline" size="sm" onClick={() => appendParty({ clientId: crypto.randomUUID(), type: "FATHER", side: "BOTH", name: "", pairedWithId: "none", attireColor: "", photoUrl: "", isDeceased: false, isMentioned: true, hasTribute: false })}>
                     <Plus className="w-4 h-4 mr-2" /> Adicionar
                   </Button>
                 </div>
@@ -449,7 +449,7 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
                                       if (val === "add_new") {
                                         const newId = crypto.randomUUID();
                                         // @ts-ignore - partyFields structure
-                                        appendParty({ clientId: newId, type: watchedParty[index].type || "FATHER", side: watchedParty[index].side || "BOTH", name: "", pairedWithId: watchedParty[index].clientId, attireColor: watchedParty[index].attireColor || "", isDeceased: false, isMentioned: true, hasTribute: false });
+                                        appendParty({ clientId: newId, type: watchedParty[index].type || "FATHER", side: watchedParty[index].side || "BOTH", name: "", pairedWithId: watchedParty[index].clientId, attireColor: watchedParty[index].attireColor || "", photoUrl: "", isDeceased: false, isMentioned: true, hasTribute: false });
                                         field.onChange(newId);
                                       } else {
                                         field.onChange(val);
@@ -495,7 +495,59 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
                         );
                       })()}
                         </div>
-                        
+
+                        <div className="flex items-center gap-3">
+                          <Controller
+                            name={`partyMembers.${index}.photoUrl`}
+                            control={control}
+                            render={({ field }) => (
+                              <>
+                                {field.value ? (
+                                  <div className="relative shrink-0">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={field.value} alt="Foto" className="w-14 h-14 rounded-full object-cover border" />
+                                    <Button
+                                      type="button" variant="destructive" size="icon"
+                                      className="absolute -top-1 -right-1 w-5 h-5 rounded-full"
+                                      title="Remover foto"
+                                      onClick={() => field.onChange("")}
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center text-lg font-display shrink-0">
+                                    {(watchedParty[index]?.name || "?").charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                                <div className="flex-1 space-y-1.5 min-w-0">
+                                  <Label className="text-xs font-semibold">Foto (rosto)</Label>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <UploadButton
+                                      endpoint="imageUploader"
+                                      appearance={{ button: "h-9 px-3 text-xs rounded-md", container: "w-auto" }}
+                                      content={{ button: "Enviar foto" }}
+                                      onClientUploadComplete={(res) => {
+                                        field.onChange(res[0].url);
+                                        toast.success("Foto enviada! Salve as alterações.");
+                                      }}
+                                      onUploadError={(error: Error) => {
+                                        toast.error(`Erro ao enviar: ${error.message}`);
+                                      }}
+                                    />
+                                    <Input
+                                      placeholder="ou cole a URL..."
+                                      value={field.value || ""}
+                                      onChange={(e) => field.onChange(e.target.value)}
+                                      className="h-9 text-xs flex-1 min-w-[140px] bg-background"
+                                    />
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          />
+                        </div>
+
                         <div className="flex flex-wrap items-center gap-6 pt-4 border-t border-border/50">
                           <div className="flex items-center gap-2">
                             <Controller

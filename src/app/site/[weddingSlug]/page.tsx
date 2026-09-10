@@ -1,13 +1,38 @@
 import { prisma } from "@/lib/prisma"
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { MapPin, Shirt, Gift, Clock } from "lucide-react"
+import { MapPin, Shirt, Gift, Clock, Navigation, BedDouble, Car, Sparkles } from "lucide-react"
 import { getMessages } from "@/app/actions/rsvp"
 import { getSiteGuestBySlug } from "@/lib/site-guest"
 import { Countdown, Mural } from "./interactive"
 import { Eyebrow, Ornament } from "@/components/site/site-ui"
+import { SafeImage } from "@/components/ui/safe-image"
 
 const HERO_FALLBACK = "https://images.unsplash.com/photo-1519225421980-715cb0215aed?q=80&w=2070&auto=format&fit=crop"
+
+const PARKING_LABELS: Record<string, string> = {
+  no_parking: "Sem estacionamento no local",
+  free_on_site: "Estacionamento gratuito no local",
+  paid_on_site: "Estacionamento pago no local",
+  street: "Estacionamento na rua",
+  valet: "Valet / Manobrista",
+}
+
+const VENDOR_LABELS: Record<string, string> = {
+  SALON: "Salão de Beleza",
+  BARBERSHOP: "Barbearia",
+  SUIT_SHOP: "Trajes",
+  HOTEL: "Hospedagem",
+  BEAUTY_CLINIC: "Estética",
+  MAKEUP_ARTIST: "Maquiagem",
+  HAIR_STYLIST: "Cabelo",
+  MANICURE: "Manicure",
+  SPA: "Spa",
+  DRESS_SHOP: "Vestidos",
+  JEWELRY: "Joalheria",
+}
+
+const mapsUrl = (address: string) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 
 function formatLong(date: Date) {
   return date.toLocaleDateString("pt-BR", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
@@ -15,7 +40,19 @@ function formatLong(date: Date) {
 
 export default async function WeddingSitePage({ params }: { params: Promise<{ weddingSlug: string }> }) {
   const wedding = await prisma.wedding.findUnique({
-    where: { slug: (await params).weddingSlug }
+    where: { slug: (await params).weddingSlug },
+    include: {
+      partyMembers: {
+        where: {
+          type: { in: ["BRIDESMAID", "GROOMSMAN"] },
+          isMentioned: true,
+        },
+        orderBy: [{ side: "asc" }, { name: "asc" }],
+      },
+      vendorRecommendations: {
+        orderBy: { name: "asc" },
+      },
+    },
   })
 
   if (!wedding) {
@@ -30,6 +67,26 @@ export default async function WeddingSitePage({ params }: { params: Promise<{ we
   if (wedding.ceremonyLocation) details.push({ icon: MapPin, label: "Cerimônia", value: wedding.ceremonyLocation })
   if (wedding.receptionLocation) details.push({ icon: Clock, label: "Recepção", value: wedding.receptionLocation })
   if (wedding.dressCode) details.push({ icon: Shirt, label: "Traje", value: wedding.dressCode })
+
+  const first1 = wedding.partner1Name.split(" ")[0]
+  const first2 = wedding.partner2Name.split(" ")[0]
+  const padrinhos = wedding.partyMembers || []
+  const vendors = wedding.vendorRecommendations || []
+
+  const parkingInfo = [
+    wedding.ceremonyParkingType && wedding.ceremonyParkingType !== "none"
+      ? { label: "Cerimônia", value: PARKING_LABELS[wedding.ceremonyParkingType] || wedding.ceremonyParkingType }
+      : null,
+    wedding.receptionParkingType && wedding.receptionParkingType !== "none"
+      ? { label: "Recepção", value: PARKING_LABELS[wedding.receptionParkingType] || wedding.receptionParkingType }
+      : null,
+  ].filter((x): x is { label: string, value: string } => !!x && !!x.value)
+
+  const hasLogistics =
+    wedding.ceremonyLocation || wedding.receptionLocation ||
+    parkingInfo.length > 0 ||
+    (wedding.hasAccommodationTips && wedding.accommodationTips) ||
+    vendors.length > 0
 
   return (
     <div className="w-full">
@@ -114,6 +171,138 @@ export default async function WeddingSitePage({ params }: { params: Promise<{ we
                 </div>
               ))}
             </div>
+          </div>
+        </section>
+      )}
+
+      {/* Padrinhos */}
+      {padrinhos.length > 0 && (
+        <section className="mx-auto max-w-5xl px-4 py-20">
+          <div className="text-center space-y-3 mb-12">
+            <Eyebrow>Padrinhos & Madrinhas</Eyebrow>
+            <h2 className="font-display text-4xl md:text-5xl font-medium">Quem está ao nosso lado</h2>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
+            {padrinhos.map((p) => (
+              <div key={p.id} className="text-center space-y-3">
+                {p.photoUrl ? (
+                  <SafeImage
+                    src={p.photoUrl}
+                    alt={p.name}
+                    className="mx-auto w-28 h-28 md:w-32 md:h-32 rounded-full overflow-hidden border-2 border-primary/20 shadow-sm bg-muted"
+                    imgClassName="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="mx-auto w-28 h-28 md:w-32 md:h-32 rounded-full bg-primary/10 border-2 border-primary/20 flex items-center justify-center font-display text-4xl text-primary">
+                    {p.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <p className="font-display text-xl leading-tight">{p.name}</p>
+                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mt-1">
+                    {p.side === "BOTH" ? "Do casal" : p.side === "PARTNER_1" ? `De ${first1}` : `De ${first2}`}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <Ornament className="mt-12" />
+        </section>
+      )}
+
+      {/* Informações úteis */}
+      {hasLogistics && (
+        <section className="bg-card border-y border-border/60">
+          <div className="mx-auto max-w-5xl px-4 py-20">
+            <div className="text-center space-y-3 mb-12">
+              <Eyebrow>Informações úteis</Eyebrow>
+              <h2 className="font-display text-4xl md:text-5xl font-medium">Tudo para você chegar bem</h2>
+            </div>
+            <div className="grid gap-6 md:grid-cols-2">
+              {(wedding.ceremonyLocation || wedding.receptionLocation) && (
+                <div className="rounded-2xl border border-border/70 bg-background p-8 shadow-sm">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Navigation className="w-5 h-5 text-primary" />
+                    <h3 className="font-display text-2xl">Como chegar</h3>
+                  </div>
+                  <div className="space-y-4">
+                    {wedding.ceremonyLocation && (
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Cerimônia</p>
+                        <p className="mt-1">{wedding.ceremonyLocation}</p>
+                        <a href={mapsUrl(wedding.ceremonyLocation)} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-primary hover:underline">
+                          Abrir no Maps →
+                        </a>
+                      </div>
+                    )}
+                    {wedding.receptionLocation && (
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Recepção</p>
+                        <p className="mt-1">{wedding.receptionLocation}</p>
+                        <a href={mapsUrl(wedding.receptionLocation)} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-primary hover:underline">
+                          Abrir no Maps →
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {(parkingInfo.length > 0 || (wedding.hasAccommodationTips && wedding.accommodationTips)) && (
+                <div className="rounded-2xl border border-border/70 bg-background p-8 shadow-sm space-y-6">
+                  {parkingInfo.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <Car className="w-5 h-5 text-primary" />
+                        <h3 className="font-display text-2xl">Estacionamento</h3>
+                      </div>
+                      <ul className="space-y-1.5 text-sm">
+                        {parkingInfo.map((p, i) => (
+                          <li key={i}><span className="font-medium">{p.label}:</span> {p.value}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {wedding.hasAccommodationTips && wedding.accommodationTips && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <BedDouble className="w-5 h-5 text-primary" />
+                        <h3 className="font-display text-2xl">Onde ficar</h3>
+                      </div>
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap">{wedding.accommodationTips}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {vendors.length > 0 && (
+              <div className="mt-6 rounded-2xl border border-border/70 bg-background p-8 shadow-sm">
+                <div className="flex items-center gap-2 mb-6">
+                  <Sparkles className="w-5 h-5 text-primary" />
+                  <h3 className="font-display text-2xl">Indicados pelos noivos</h3>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {vendors.map((v) => (
+                    <div key={v.id} className="rounded-xl bg-muted/40 border border-border/50 p-5">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-primary">
+                        {VENDOR_LABELS[v.type] || v.type}
+                      </p>
+                      <p className="mt-1 font-display text-xl leading-snug">{v.name}</p>
+                      {v.recommendedProfessional && (
+                        <p className="mt-1 text-sm text-muted-foreground">Falar com: {v.recommendedProfessional}</p>
+                      )}
+                      {v.address && (
+                        <a href={mapsUrl(v.address)} target="_blank" rel="noopener noreferrer" className="mt-1 block text-sm text-primary hover:underline">
+                          {v.address} →
+                        </a>
+                      )}
+                      {v.notes && <p className="mt-2 text-sm font-light">{v.notes}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </section>
       )}

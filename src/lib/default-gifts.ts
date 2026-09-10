@@ -27,7 +27,7 @@ export const DEFAULT_GIFTS = [
     "name": "Jogo de Panelas Antiaderente",
     "description": "Contribuir com o(a) Jogo de Panelas Antiaderente",
     "price": 800.0,
-    "imageUrl": "https://images.unsplash.com/photo-1584269600519-112d06630def?q=80&w=600&auto=format&fit=crop",
+    "imageUrl": "https://images.unsplash.com/photo-1556911220-bff31c812dba?q=80&w=600&auto=format&fit=crop",
     "category": "Eletrodomésticos & Cozinha",
     "quotaCount": 1
   },
@@ -35,7 +35,7 @@ export const DEFAULT_GIFTS = [
     "name": "Liquidificador Potente",
     "description": "Contribuir com o(a) Liquidificador Potente",
     "price": 200.0,
-    "imageUrl": "https://images.unsplash.com/photo-1585237832810-749e7b231ff6?q=80&w=600&auto=format&fit=crop",
+    "imageUrl": "https://images.unsplash.com/photo-1570222094114-d054a817e56b?q=80&w=600&auto=format&fit=crop",
     "category": "Eletrodomésticos & Cozinha",
     "quotaCount": 1
   },
@@ -43,7 +43,7 @@ export const DEFAULT_GIFTS = [
     "name": "Micro-ondas",
     "description": "Contribuir com o(a) Micro-ondas",
     "price": 700.0,
-    "imageUrl": "https://images.unsplash.com/photo-1585226162319-943fcfd3bc9b?q=80&w=600&auto=format&fit=crop",
+    "imageUrl": "https://images.unsplash.com/photo-1595246140625-573b715d11dc?q=80&w=600&auto=format&fit=crop",
     "category": "Eletrodomésticos & Cozinha",
     "quotaCount": 1
   },
@@ -51,7 +51,7 @@ export const DEFAULT_GIFTS = [
     "name": "Batedeira Planetária",
     "description": "Contribuir com o(a) Batedeira Planetária",
     "price": 850.0,
-    "imageUrl": "https://images.unsplash.com/photo-1596450630018-05fc0007827e?q=80&w=600&auto=format&fit=crop",
+    "imageUrl": "https://images.unsplash.com/photo-1578643463396-0997cb5328c1?q=80&w=600&auto=format&fit=crop",
     "category": "Eletrodomésticos & Cozinha",
     "quotaCount": 1
   },
@@ -75,7 +75,7 @@ export const DEFAULT_GIFTS = [
     "name": "Toalhas de Banho Bordadas",
     "description": "Contribuir com o(a) Toalhas de Banho Bordadas",
     "price": 250.0,
-    "imageUrl": "https://images.unsplash.com/photo-1616627544520-21390d405232?q=80&w=600&auto=format&fit=crop",
+    "imageUrl": "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?q=80&w=600&auto=format&fit=crop",
     "category": "Cama, Mesa e Banho",
     "quotaCount": 1
   },
@@ -91,7 +91,7 @@ export const DEFAULT_GIFTS = [
     "name": "Faqueiro Inox 101 Peças",
     "description": "Contribuir com o(a) Faqueiro Inox 101 Peças",
     "price": 500.0,
-    "imageUrl": "https://images.unsplash.com/photo-1622340884631-f3bdf90dceaf?q=80&w=600&auto=format&fit=crop",
+    "imageUrl": "https://images.unsplash.com/photo-1584346133934-a3afd2a33c4c?q=80&w=600&auto=format&fit=crop",
     "category": "Cama, Mesa e Banho",
     "quotaCount": 1
   },
@@ -163,7 +163,7 @@ export const DEFAULT_GIFTS = [
     "name": "Rack para TV",
     "description": "Contribuir com o(a) Rack para TV",
     "price": 700.0,
-    "imageUrl": "https://images.unsplash.com/photo-1595514535311-6b22b6408cb8?q=80&w=600&auto=format&fit=crop",
+    "imageUrl": "https://images.unsplash.com/photo-1595428774223-ef52624120d2?q=80&w=600&auto=format&fit=crop",
     "category": "Móveis",
     "quotaCount": 1
   },
@@ -179,7 +179,7 @@ export const DEFAULT_GIFTS = [
     "name": "Aspirina para o Noivo (Cota Ressaca)",
     "description": "Contribuir com o(a) Aspirina para o Noivo (Cota Ressaca)",
     "price": 50.0,
-    "imageUrl": "https://images.unsplash.com/photo-1584308666744-24d5e4b2d35c?q=80&w=600&auto=format&fit=crop",
+    "imageUrl": "https://images.unsplash.com/photo-1535958636474-b021ee887b13?q=80&w=600&auto=format&fit=crop",
     "category": "Brincadeiras",
     "quotaCount": 1
   },
