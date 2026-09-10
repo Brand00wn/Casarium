@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { MapPin, Shirt, Gift, Clock, Navigation, BedDouble, Car, Sparkles } from "lucide-react"
+import { MapPin, Shirt, Gift, Clock, Navigation, BedDouble, Car, Sparkles, Scissors, Hotel, Store, Flower2, Gem, type LucideIcon } from "lucide-react"
 import { getMessages } from "@/app/actions/rsvp"
 import { getSiteGuestBySlug } from "@/lib/site-guest"
 import { Countdown, Mural } from "./interactive"
@@ -16,6 +16,34 @@ const PARKING_LABELS: Record<string, string> = {
   paid_on_site: "Estacionamento pago no local",
   street: "Estacionamento na rua",
   valet: "Valet / Manobrista",
+}
+
+const VENDOR_ICONS: Record<string, LucideIcon> = {
+  SALON: Scissors,
+  BARBERSHOP: Scissors,
+  SUIT_SHOP: Store,
+  HOTEL: Hotel,
+  BEAUTY_CLINIC: Sparkles,
+  MAKEUP_ARTIST: Sparkles,
+  HAIR_STYLIST: Scissors,
+  MANICURE: Sparkles,
+  SPA: Flower2,
+  DRESS_SHOP: Store,
+  JEWELRY: Gem,
+}
+
+function MapsButton({ address, children }: { address: string, children?: React.ReactNode }) {
+  return (
+    <a
+      href={mapsUrl(address)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-primary text-primary-foreground text-xs font-semibold uppercase tracking-[0.12em] hover:bg-primary/90 transition-colors shadow-sm"
+    >
+      <Navigation className="w-3.5 h-3.5" />
+      {children || "Como chegar"}
+    </a>
+  );
 }
 
 const VENDOR_LABELS: Record<string, string> = {
@@ -63,10 +91,13 @@ export default async function WeddingSitePage({ params }: { params: Promise<{ we
   const siteGuest = await getSiteGuestBySlug(wedding.slug)
   const eventDate = wedding.ceremonyDate ?? wedding.date
 
+  const eventHour = eventDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+  const eventDateShort = eventDate.toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" })
+
   const details: { icon: any, label: string, value: string }[] = []
-  if (wedding.ceremonyLocation) details.push({ icon: MapPin, label: "Cerimônia", value: wedding.ceremonyLocation })
-  if (wedding.receptionLocation) details.push({ icon: Clock, label: "Recepção", value: wedding.receptionLocation })
   if (wedding.dressCode) details.push({ icon: Shirt, label: "Traje", value: wedding.dressCode })
+  // Quando aparece junto ao traje — data/hora já estão no topo; seção só existe se houver traje
+  const whenCard = { icon: Clock, label: "Quando", value: `${eventDateShort} · ${eventHour}` }
 
   const first1 = wedding.partner1Name.split(" ")[0]
   const first2 = wedding.partner2Name.split(" ")[0]
@@ -152,7 +183,7 @@ export default async function WeddingSitePage({ params }: { params: Promise<{ we
         </section>
       )}
 
-      {/* Detalhes */}
+      {/* Detalhes — quando + traje (endereços ficam só em Informações) */}
       {details.length > 0 && (
         <section className="bg-card border-y border-border/60">
           <div className="mx-auto max-w-5xl px-4 py-20">
@@ -160,8 +191,8 @@ export default async function WeddingSitePage({ params }: { params: Promise<{ we
               <Eyebrow>O grande dia</Eyebrow>
               <h2 className="font-display text-4xl md:text-5xl font-medium">Detalhes</h2>
             </div>
-            <div className={`grid gap-6 ${details.length === 1 ? "" : details.length === 2 ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
-              {details.map((d, i) => (
+            <div className={`grid gap-6 max-w-3xl mx-auto ${details.length > 1 ? "md:grid-cols-2" : ""}`}>
+              {[whenCard, ...details].map((d, i) => (
                 <div key={i} className="rounded-2xl border border-border/70 bg-background p-8 text-center shadow-sm">
                   <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
                     <d.icon className="w-5 h-5 text-primary" />
@@ -221,27 +252,31 @@ export default async function WeddingSitePage({ params }: { params: Promise<{ we
             <div className="grid gap-6 md:grid-cols-2">
               {(wedding.ceremonyLocation || wedding.receptionLocation) && (
                 <div className="rounded-2xl border border-border/70 bg-background p-8 shadow-sm">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Navigation className="w-5 h-5 text-primary" />
+                  <div className="flex items-center gap-2.5 mb-6">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Navigation className="w-4.5 h-4.5 text-primary" />
+                    </div>
                     <h3 className="font-display text-2xl">Como chegar</h3>
                   </div>
-                  <div className="space-y-4">
+                  <div className="space-y-6">
                     {wedding.ceremonyLocation && (
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Cerimônia</p>
-                        <p className="mt-1">{wedding.ceremonyLocation}</p>
-                        <a href={mapsUrl(wedding.ceremonyLocation)} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-primary hover:underline">
-                          Abrir no Maps →
-                        </a>
+                      <div className="flex items-start gap-3">
+                        <MapPin className="w-4 h-4 mt-1 shrink-0 text-primary" />
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Cerimônia</p>
+                          <p className="font-medium leading-snug">{wedding.ceremonyLocation}</p>
+                          <MapsButton address={wedding.ceremonyLocation} />
+                        </div>
                       </div>
                     )}
                     {wedding.receptionLocation && (
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Recepção</p>
-                        <p className="mt-1">{wedding.receptionLocation}</p>
-                        <a href={mapsUrl(wedding.receptionLocation)} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-primary hover:underline">
-                          Abrir no Maps →
-                        </a>
+                      <div className="flex items-start gap-3">
+                        <MapPin className="w-4 h-4 mt-1 shrink-0 text-primary" />
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Recepção</p>
+                          <p className="font-medium leading-snug">{wedding.receptionLocation}</p>
+                          <MapsButton address={wedding.receptionLocation} />
+                        </div>
                       </div>
                     )}
                   </div>
@@ -278,28 +313,47 @@ export default async function WeddingSitePage({ params }: { params: Promise<{ we
 
             {vendors.length > 0 && (
               <div className="mt-6 rounded-2xl border border-border/70 bg-background p-8 shadow-sm">
-                <div className="flex items-center gap-2 mb-6">
-                  <Sparkles className="w-5 h-5 text-primary" />
+                <div className="flex items-center gap-2.5 mb-2">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Sparkles className="w-4.5 h-4.5 text-primary" />
+                  </div>
                   <h3 className="font-display text-2xl">Indicados pelos noivos</h3>
                 </div>
+                <p className="text-sm text-muted-foreground font-light mb-6">
+                  Profissionais de confiança para você se preparar para o grande dia.
+                </p>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {vendors.map((v) => (
-                    <div key={v.id} className="rounded-xl bg-muted/40 border border-border/50 p-5">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-primary">
-                        {VENDOR_LABELS[v.type] || v.type}
-                      </p>
-                      <p className="mt-1 font-display text-xl leading-snug">{v.name}</p>
-                      {v.recommendedProfessional && (
-                        <p className="mt-1 text-sm text-muted-foreground">Falar com: {v.recommendedProfessional}</p>
-                      )}
-                      {v.address && (
-                        <a href={mapsUrl(v.address)} target="_blank" rel="noopener noreferrer" className="mt-1 block text-sm text-primary hover:underline">
-                          {v.address} →
-                        </a>
-                      )}
-                      {v.notes && <p className="mt-2 text-sm font-light">{v.notes}</p>}
-                    </div>
-                  ))}
+                  {vendors.map((v) => {
+                    const Icon = VENDOR_ICONS[v.type] || Sparkles;
+                    return (
+                      <div key={v.id} className="rounded-xl bg-muted/40 border border-border/50 p-5 hover:border-primary/40 hover:shadow-md transition-all">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                            <Icon className="w-4 h-4 text-primary" />
+                          </div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                            {VENDOR_LABELS[v.type] || v.type}
+                          </p>
+                        </div>
+                        <p className="mt-3 font-display text-2xl leading-snug">{v.name}</p>
+                        {v.recommendedProfessional && (
+                          <p className="mt-1 text-sm">
+                            <span className="text-muted-foreground">Falar com</span>{" "}
+                            <span className="font-medium">{v.recommendedProfessional}</span>
+                          </p>
+                        )}
+                        {v.address && (
+                          <p className="mt-1 text-sm text-muted-foreground flex items-start gap-1">
+                            <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                            <a href={mapsUrl(v.address)} target="_blank" rel="noopener noreferrer" className="hover:text-primary hover:underline">
+                              {v.address}
+                            </a>
+                          </p>
+                        )}
+                        {v.notes && <p className="mt-2 text-sm font-light italic border-t border-border/50 pt-2">“{v.notes}”</p>}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
