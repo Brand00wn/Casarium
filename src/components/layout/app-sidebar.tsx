@@ -13,7 +13,7 @@ import {
   SidebarHeader,
   SidebarFooter
 } from "@/components/ui/sidebar"
-import { Users, LayoutDashboard, Gift, Image as ImageIcon, Settings, ScanLine, LogOut, User, ArrowLeft, ChevronRight, Heart, Calendar, CheckSquare } from "lucide-react"
+import { Users, LayoutDashboard, Gift, Image as ImageIcon, Settings, ScanLine, LogOut, User, ArrowLeft, ChevronRight, Heart, Calendar, CheckSquare, ExternalLink } from "lucide-react"
 import {
   CollapsibleContent,
   CollapsibleTrigger,
@@ -78,6 +78,12 @@ export async function AppSidebar({ weddingId, memberRole }: { weddingId: string,
       url: `/${weddingId}/o-grande-dia`,
       icon: Heart,
     },
+    {
+      title: "Site do Casal",
+      url: `/site/${weddingId}`,
+      icon: ExternalLink,
+      external: true,
+    },
   ]
 
   if (memberRole === 'PLANNER' || memberRole === 'CONCIERGE' || user?.role === 'ADMIN') {
@@ -137,7 +143,11 @@ export async function AppSidebar({ weddingId, memberRole }: { weddingId: string,
                   </SidebarCollapsibleItem>
                 ) : (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton render={<Link href={item.url} />}>
+                    <SidebarMenuButton render={
+                      (item as any).external
+                        ? <Link href={item.url} target="_blank" rel="noopener noreferrer" />
+                        : <Link href={item.url} />
+                    }>
                       <item.icon />
                       <span>{item.title}</span>
                     </SidebarMenuButton>
