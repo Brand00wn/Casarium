@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendBulkInvites, sendPendingReminders, DEFAULT_MESSAGING } from "@/app/actions/messaging";
+import { sendBulkInvites, sendPendingReminders } from "@/app/actions/messaging";
+import { DEFAULT_MESSAGING } from "@/lib/whatsapp-helpers";
 
 const DAY_MS = 1000 * 60 * 60 * 24;
 

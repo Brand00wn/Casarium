@@ -8,12 +8,6 @@ import { MessageStatus, MessageType, WhatsAppStatus } from "@prisma/client";
 
 export type DeliveryResult = { ok: true } | { ok: false, error: string };
 
-export const SEND_DELAY_MS = 1500;
-
-export function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 async function logDelivery(guestId: string, weddingId: string, type: MessageType, ok: boolean) {
   try {
     await prisma.whatsAppMessage.create({

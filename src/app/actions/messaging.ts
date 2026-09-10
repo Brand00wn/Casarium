@@ -3,15 +3,8 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, getUserMemberRole } from "@/lib/session";
 import { isCeremonyStaff } from "@/lib/messaging-gate";
-import { deliverInvite, deliverReminder, sleep, SEND_DELAY_MS } from "@/app/actions/whatsapp";
-
-export const DEFAULT_MESSAGING = {
-  autoInviteEnabled: true,
-  inviteDaysBefore: 30,
-  reminderEnabled: true,
-  reminderDaysBefore: 7,
-  reminderIntervalDays: 3,
-};
+import { DEFAULT_MESSAGING, SEND_DELAY_MS, sleep } from "@/lib/whatsapp-helpers";
+import { deliverInvite, deliverReminder } from "@/app/actions/whatsapp";
 
 /** Só a equipe do cerimonial opera disparos (nunca os noivos). */
 async function requireStaff(weddingSlug: string) {

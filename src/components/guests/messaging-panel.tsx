@@ -12,8 +12,8 @@ import {
   updateMessagingConfig,
   sendAllInvitesNow,
   sendPendingRemindersNow,
-  DEFAULT_MESSAGING,
 } from "@/app/actions/messaging";
+import { DEFAULT_MESSAGING } from "@/lib/whatsapp-helpers";
 
 type Summary = { sent: number; failed: { name: string, error: string }[]; skippedNoPhone: number };
 
