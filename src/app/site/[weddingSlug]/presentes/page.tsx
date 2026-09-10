@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getSiteGuestBySlug } from "@/lib/site-guest";
 import { notFound } from "next/navigation";
-import { PageHero } from "@/components/site/site-ui";
+import { PageHero, CoupleNames } from "@/components/site/site-ui";
 import GiftGrid from "./GiftGrid";
 
 export default async function GiftsSitePage({
@@ -31,7 +31,7 @@ export default async function GiftsSitePage({
         <div className="max-w-7xl mx-auto">
           <PageHero
             eyebrow="Lista de presentes"
-            title={`${wedding.partner1Name} & ${wedding.partner2Name}`}
+            title={<CoupleNames partner1={wedding.partner1Name} partner2={wedding.partner2Name} />}
             description="Sua presença é o maior presente — mas se quiser nos mimar, escolha com carinho."
           />
         </div>

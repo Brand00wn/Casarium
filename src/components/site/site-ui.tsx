@@ -18,6 +18,16 @@ export function SectionTitle({ children, className }: { children: React.ReactNod
   );
 }
 
+/** Nomes do casal com quebra elegante: cada nome inteiro nunca parte no meio. */
+export function CoupleNames({ partner1, partner2, className }: { partner1: string, partner2: string, className?: string }) {
+  return (
+    <span className={cn("inline", className)}>
+      <span className="whitespace-nowrap">{partner1}</span>
+      <span className="whitespace-nowrap"> & </span>
+      <span className="whitespace-nowrap">{partner2}</span>
+    </span>
+  );
+}
 /** Ornamento divisor — filete com detalhe central. */
 export function Ornament({ className }: { className?: string }) {
   return (
@@ -30,7 +40,7 @@ export function Ornament({ className }: { className?: string }) {
 }
 
 /** Cabeçalho padrão das páginas internas (RSVP, Presentes). */
-export function PageHero({ eyebrow, title, description }: { eyebrow: string, title: string, description?: string }) {
+export function PageHero({ eyebrow, title, description }: { eyebrow: string, title: React.ReactNode, description?: string }) {
   return (
     <div className="text-center max-w-2xl mx-auto space-y-4">
       <Eyebrow>{eyebrow}</Eyebrow>
