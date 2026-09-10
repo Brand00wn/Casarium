@@ -20,7 +20,13 @@ export default async function GiftsSitePage({
 
   const gifts = await prisma.gift.findMany({
     where: { weddingId: wedding.id },
+    include: { categories: true },
     orderBy: { createdAt: "desc" },
+  });
+
+  const categories = await prisma.giftCategory.findMany({
+    where: { weddingId: wedding.id },
+    orderBy: { name: "asc" },
   });
 
   const siteGuest = await getSiteGuestBySlug(weddingSlug);
@@ -44,6 +50,7 @@ export default async function GiftsSitePage({
         ) : (
           <GiftGrid
             gifts={gifts}
+            categories={categories}
             weddingId={wedding.id}
             weddingSlug={wedding.slug}
             siteGuest={siteGuest ? { id: siteGuest.id, name: siteGuest.name } : null}

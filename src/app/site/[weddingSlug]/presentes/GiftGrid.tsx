@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Gift } from "@prisma/client";
+import { Gift, GiftCategory } from "@prisma/client";
 import { simulateCheckout } from "@/app/actions/gifts";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -18,19 +18,24 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { QrCode, CreditCard, Gift as GiftIcon } from "lucide-react";
 
+type GiftWithCategories = Gift & { categories?: GiftCategory[] };
+
 export default function GiftGrid({
   gifts,
+  categories,
   weddingId,
   weddingSlug,
   siteGuest,
 }: {
-  gifts: Gift[];
+  gifts: GiftWithCategories[];
+  categories: GiftCategory[];
   weddingId: string;
   weddingSlug: string;
   siteGuest?: { id: string, name: string } | null;
 }) {
   const [selectedGift, setSelectedGift] = useState<Gift | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
   const [guestName, setGuestName] = useState("");
   const [guestMessage, setGuestMessage] = useState("");
@@ -79,10 +84,34 @@ export default function GiftGrid({
     }
   };
 
+  const visibleGifts = gifts.filter(g => categoryFilter === "all" || g.categories?.some(c => c.id === categoryFilter));
+
   return (
     <>
+      {categories.length > 0 && (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCategoryFilter("all")}
+            className={`h-9 px-4 rounded-full text-[13px] font-semibold uppercase tracking-[0.1em] border transition-all ${categoryFilter === "all" ? "bg-primary text-primary-foreground border-primary shadow-sm" : "bg-card text-muted-foreground border-border/70 hover:border-primary/50 hover:text-foreground"}`}
+          >
+            Todos
+          </button>
+          {categories.map(cat => (
+            <button
+              key={cat.id}
+              type="button"
+              onClick={() => setCategoryFilter(cat.id)}
+              className={`h-9 px-4 rounded-full text-[13px] font-semibold uppercase tracking-[0.1em] border transition-all inline-flex items-center gap-2 ${categoryFilter === cat.id ? "bg-primary text-primary-foreground border-primary shadow-sm" : "bg-card text-muted-foreground border-border/70 hover:border-primary/50 hover:text-foreground"}`}
+            >
+              {cat.color && <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }} />}
+              {cat.name}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {gifts.map((gift) => (
+        {visibleGifts.map((gift) => (
           <Card key={gift.id} className="group overflow-hidden flex flex-col rounded-2xl border-border/70 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
             {gift.imageUrl ? (
               <div className="w-full h-52 bg-muted">
@@ -95,6 +124,16 @@ export default function GiftGrid({
             )}
             <CardHeader className="pb-2">
               <CardTitle className="font-display text-2xl font-medium">{gift.name}</CardTitle>
+              {gift.categories && gift.categories.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-2">
+                  {gift.categories.slice(0, 3).map(c => (
+                    <span key={c.id} className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground bg-muted/60 rounded-full px-2 py-0.5">
+                      {c.color && <span className="w-2 h-2 rounded-full" style={{ backgroundColor: c.color }} />}
+                      {c.name}
+                    </span>
+                  ))}
+                </div>
+              )}
             </CardHeader>
             <CardContent className="flex-grow">
               <p className="text-sm text-muted-foreground font-light mb-4">{gift.description}</p>
@@ -110,6 +149,11 @@ export default function GiftGrid({
           </Card>
         ))}
       </div>
+      {visibleGifts.length === 0 && (
+        <p className="text-center text-muted-foreground font-light py-12">
+          Nenhum presente nesta categoria ainda.
+        </p>
+      )}
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="sm:max-w-[425px]">
