@@ -130,6 +130,24 @@ model Wedding {
   events                Event[]
   taskCategories        TaskCategory[]
   tasks                 Task[]
+  messagingConfig       WeddingMessagingConfig?
+}
+
+// Automação de disparos WhatsApp (convites + lembretes de RSVP)
+model WeddingMessagingConfig {
+  id                   String    @id @default(uuid())
+  weddingId            String    @unique
+  wedding              Wedding   @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  // Convites automáticos
+  autoInviteEnabled    Boolean   @default(true)
+  inviteDaysBefore     Int       @default(30)
+  inviteSentAt         DateTime?
+  // Lembretes para quem não confirmou
+  reminderEnabled      Boolean   @default(true)
+  reminderDaysBefore   Int       @default(7)
+  reminderIntervalDays Int       @default(3)
+  lastReminderAt       DateTime?
+  updatedAt            DateTime  @updatedAt
 }
 
 model VendorRecommendation {

@@ -1,0 +1,191 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Send, BellRing, Loader2 } from "lucide-react";
+import {
+  getMessagingConfig,
+  updateMessagingConfig,
+  sendAllInvitesNow,
+  sendPendingRemindersNow,
+  DEFAULT_MESSAGING,
+} from "@/app/actions/messaging";
+
+type Summary = { sent: number; failed: { name: string, error: string }[]; skippedNoPhone: number };
+
+export function MessagingPanel({ weddingSlug }: { weddingSlug: string }) {
+  const [cfg, setCfg] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState<"invites" | "reminders" | null>(null);
+  const [result, setResult] = useState<{ kind: string, summary: Summary } | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    getMessagingConfig(weddingSlug)
+      .then(setCfg)
+      .catch((e: any) => setError(e.message || "Erro ao carregar configuração."))
+      .finally(() => setLoading(false));
+  }, [weddingSlug]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      const updated = await updateMessagingConfig(weddingSlug, {
+        autoInviteEnabled: cfg.autoInviteEnabled,
+        inviteDaysBefore: Number(cfg.inviteDaysBefore),
+        reminderEnabled: cfg.reminderEnabled,
+        reminderDaysBefore: Number(cfg.reminderDaysBefore),
+        reminderIntervalDays: Number(cfg.reminderIntervalDays),
+      });
+      setCfg(updated);
+    } catch (e: any) {
+      setError(e.message || "Erro ao salvar.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSend = async (kind: "invites" | "reminders") => {
+    const label = kind === "invites" ? "convites" : "lembretes";
+    if (!confirm(`Enviar ${label} agora para todos os convidados com telefone?`)) return;
+    setSending(kind);
+    setResult(null);
+    setError("");
+    try {
+      const summary = kind === "invites"
+        ? await sendAllInvitesNow(weddingSlug)
+        : await sendPendingRemindersNow(weddingSlug);
+      setResult({ kind: label, summary });
+    } catch (e: any) {
+      setError(e.message || "Erro ao enviar.");
+    } finally {
+      setSending(null);
+    }
+  };
+
+  if (loading) {
+    return <Card><CardContent className="p-6 text-sm text-muted-foreground">Carregando disparos...</CardContent></Card>;
+  }
+
+  if (!cfg) {
+    return <Card><CardContent className="p-6 text-sm text-red-500">{error || "Erro ao carregar."}</CardContent></Card>;
+  }
+
+  return (
+    <Card className="border-primary/20">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Send className="w-5 h-5 text-primary" /> Disparos de WhatsApp
+        </CardTitle>
+        <CardDescription>
+          Convites automáticos antes da festa + lembretes para quem não confirmou. Visível só para a equipe do cerimonial.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {error && <p className="text-sm text-red-500">{error}</p>}
+
+        <div className="grid gap-6 md:grid-cols-2">
+          <div className="space-y-4 p-4 rounded-lg border bg-muted/20">
+            <div className="flex items-center justify-between">
+              <Label className="font-semibold">Convites automáticos</Label>
+              <Switch checked={!!cfg.autoInviteEnabled} onCheckedChange={(v) => setCfg({ ...cfg, autoInviteEnabled: v })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Enviar quantos dias antes?</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number" min={1} max={365}
+                  value={cfg.inviteDaysBefore ?? DEFAULT_MESSAGING.inviteDaysBefore}
+                  onChange={(e) => setCfg({ ...cfg, inviteDaysBefore: e.target.value })}
+                  className="w-24"
+                />
+                <span className="text-sm text-muted-foreground">dias antes do casamento</span>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {cfg.inviteSentAt
+                ? `Último envio em massa: ${new Date(cfg.inviteSentAt).toLocaleString("pt-BR")}`
+                : "Ainda não houve envio em massa."}
+            </p>
+            <Button
+              onClick={() => handleSend("invites")}
+              disabled={sending !== null}
+              className="w-full"
+            >
+              {sending === "invites" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+              {sending === "invites" ? "Enviando..." : "Enviar convites agora"}
+            </Button>
+          </div>
+
+          <div className="space-y-4 p-4 rounded-lg border bg-muted/20">
+            <div className="flex items-center justify-between">
+              <Label className="font-semibold">Lembretes de RSVP</Label>
+              <Switch checked={!!cfg.reminderEnabled} onCheckedChange={(v) => setCfg({ ...cfg, reminderEnabled: v })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Começar (dias antes)</Label>
+                <Input
+                  type="number" min={1} max={365}
+                  value={cfg.reminderDaysBefore ?? DEFAULT_MESSAGING.reminderDaysBefore}
+                  onChange={(e) => setCfg({ ...cfg, reminderDaysBefore: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Repetir a cada (dias)</Label>
+                <Input
+                  type="number" min={1} max={60}
+                  value={cfg.reminderIntervalDays ?? DEFAULT_MESSAGING.reminderIntervalDays}
+                  onChange={(e) => setCfg({ ...cfg, reminderIntervalDays: e.target.value })}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {cfg.lastReminderAt
+                ? `Último lembrete: ${new Date(cfg.lastReminderAt).toLocaleString("pt-BR")}`
+                : "Nenhum lembrete enviado ainda."}
+            </p>
+            <Button
+              onClick={() => handleSend("reminders")}
+              disabled={sending !== null}
+              variant="secondary"
+              className="w-full"
+            >
+              {sending === "reminders" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <BellRing className="w-4 h-4 mr-2" />}
+              {sending === "reminders" ? "Enviando..." : "Lembrar pendentes agora"}
+            </Button>
+          </div>
+        </div>
+
+        <Button onClick={handleSave} disabled={saving} variant="outline" className="w-full md:w-auto">
+          {saving ? "Salvando..." : "Salvar configuração"}
+        </Button>
+
+        {result && (
+          <div className="p-4 rounded-md border bg-green-50/50 text-sm space-y-1">
+            <p className="font-semibold text-green-700">
+              {result.kind === "convites" ? "Convites enviados" : "Lembretes enviados"}: {result.summary.sent}
+              {result.summary.skippedNoPhone > 0 && ` (${result.summary.skippedNoPhone} sem telefone/código)`}
+            </p>
+            {result.summary.failed.length > 0 && (
+              <div className="text-red-600">
+                <p className="font-semibold">Falhas ({result.summary.failed.length}):</p>
+                <ul className="list-disc pl-5 max-h-32 overflow-y-auto">
+                  {result.summary.failed.map((f, i) => (
+                    <li key={i}>{f.name}: {f.error}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

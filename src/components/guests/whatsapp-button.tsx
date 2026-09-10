@@ -6,8 +6,11 @@ import { MessageCircle, Loader2 } from "lucide-react";
 import { sendInvite } from "@/app/actions/whatsapp";
 import { toast } from "sonner";
 
-export function WhatsAppButton({ weddingId, guestId }: { weddingId: string, guestId: string }) {
+export function WhatsAppButton({ weddingId, guestId, visible = true }: { weddingId: string, guestId: string, visible?: boolean }) {
   const [loading, setLoading] = useState(false);
+
+  // Disparo individual: só equipe do cerimonial
+  if (!visible) return null;
 
   const handleSend = async () => {
     try {

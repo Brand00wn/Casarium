@@ -1,5 +1,7 @@
 import React, { Fragment } from "react"
 import { prisma } from "@/lib/prisma"
+import { getCurrentUser, getUserMemberRole } from "@/lib/session"
+import { isCeremonyStaff } from "@/lib/messaging-gate"
 import {
   Table,
   TableBody,
@@ -13,6 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { GuestDialog } from "@/components/guests/guest-dialog"
 import { DeleteGuestButton } from "@/components/guests/delete-guest-button"
 import { WhatsAppButton } from "@/components/guests/whatsapp-button"
+import { MessagingPanel } from "@/components/guests/messaging-panel"
 import { ImportGuestsDialog } from "@/components/guests/import-guests-dialog"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Edit, Sparkles, Phone, Printer } from "lucide-react"
@@ -50,6 +53,11 @@ export default async function ConvidadosPage({
   params: Promise<{ weddingId: string }>
 }) {
   const { weddingId } = await params;
+
+  // Disparos de WhatsApp: só equipe do cerimonial (nunca os noivos)
+  const currentUser = await getCurrentUser();
+  const memberRole = currentUser ? await getUserMemberRole(currentUser.id, weddingId) : null;
+  const canSendMessages = isCeremonyStaff(currentUser?.role, memberRole);
 
   // Busca os convidados do banco de dados filtrando pelo casamento
   const primaryGuests = await prisma.guest.findMany({
@@ -117,6 +125,8 @@ export default async function ConvidadosPage({
           <GuestDialog weddingId={weddingId} />
         </div>
       </div>
+
+      {canSendMessages && <MessagingPanel weddingSlug={weddingId} />}
 
       <div className="rounded-md border bg-card">
         <Table>
@@ -187,7 +197,7 @@ export default async function ConvidadosPage({
                         {dependentsCount > 0 ? <span className="text-xs bg-muted px-2 py-1 rounded-md">{dependentsCount} acompanhante(s)</span> : <span className="text-muted-foreground text-xs">-</span>}
                       </TableCell>
                       <TableCell className="text-right flex items-center justify-end space-x-2">
-                        <WhatsAppButton weddingId={weddingId} guestId={guest.id} />
+                        <WhatsAppButton weddingId={weddingId} guestId={guest.id} visible={canSendMessages} />
                         <GuestDialog 
                           weddingId={weddingId} 
                           guestId={guest.id}
