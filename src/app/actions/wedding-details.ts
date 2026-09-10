@@ -51,6 +51,18 @@ export async function updateWeddingDetails(weddingId: string, data: any) {
   const user = await getCurrentUser()
   if (!user) throw new Error("Não autorizado")
 
+  // datetime-local chega como "AAAA-MM-DDTHH:mm" sem fuso. O servidor roda em UTC,
+  // então new Date() puro deslocaria -3h. Sem offset explícito, assume Brasília
+  // (sem horário de verão desde 2019, sempre -03:00).
+  const parseDateTime = (v: any) => {
+    if (!v) return v;
+    if (v instanceof Date) return v;
+    if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?$/.test(v)) {
+      return new Date(`${v}-03:00`);
+    }
+    return new Date(v);
+  };
+
   // Validação básica se o usuário tem permissão para editar (idealmente)
   const membership = await prisma.weddingMember.findFirst({
     where: {
@@ -75,9 +87,9 @@ export async function updateWeddingDetails(weddingId: string, data: any) {
       partner1Role: data.partner1Role,
       partner2Name: data.partner2Name,
       partner2Role: data.partner2Role,
-      date: data.date ? new Date(data.date) : undefined,
-      ceremonyDate: data.ceremonyDate ? new Date(data.ceremonyDate) : null,
-      receptionDate: data.receptionDate ? new Date(data.receptionDate) : null,
+      date: data.date ? parseDateTime(data.date) : undefined,
+      ceremonyDate: data.ceremonyDate ? parseDateTime(data.ceremonyDate) : null,
+      receptionDate: data.receptionDate ? parseDateTime(data.receptionDate) : null,
       ceremonyLocation: data.ceremonyLocation || null,
       ceremonyPlaceId: data.ceremonyPlaceId || null,
       receptionLocation: data.receptionLocation || null,
@@ -93,7 +105,7 @@ export async function updateWeddingDetails(weddingId: string, data: any) {
       sitePassword: data.sitePassword || null,
       hasReception: data.hasReception ?? true,
       isSameLocation: data.isSameLocation ?? false,
-      rsvpDeadline: data.rsvpDeadline ? new Date(data.rsvpDeadline) : null,
+      rsvpDeadline: data.rsvpDeadline ? parseDateTime(data.rsvpDeadline) : null,
       rsvpMessage: data.rsvpMessage || null,
       spotifyLink: data.spotifyLink || null,
       hashtag: data.hashtag || null,

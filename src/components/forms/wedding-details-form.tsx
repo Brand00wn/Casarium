@@ -123,13 +123,19 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
     }
   }
 
-  const { register, handleSubmit, control, watch, setValue, reset, formState: { errors } } = useForm({
+  const { register, handleSubmit, control, watch, setValue, reset, getValues, formState: { errors, isDirty } } = useForm({
     defaultValues: getFormValues(wedding)
   })
 
+  // Flag fora do state para decidir sem re-render: nunca reconstrói o form
+  // enquanto o usuário está editando (evita limpar campo e roubar o foco).
+  const dirtyRef = useRef(false)
+  dirtyRef.current = isDirty
+
   // Watch for external changes (like AI API calls that trigger router.refresh)
+  // — mas só quando o usuário NÃO está com edição pendente.
   useEffect(() => {
-    reset(getFormValues(wedding))
+    if (!dirtyRef.current) reset(getFormValues(wedding))
   }, [wedding, reset])
 
   const { fields: vendorFields, append: appendVendor, remove: removeVendor } = useFieldArray({
@@ -163,21 +169,43 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
   const isPublicSiteEnabled = watch("isPublicSiteEnabled")
 
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const savingRef = useRef(false)
+  const queuedRef = useRef(false)
+
+  // Salva o form atual e sincroniza a baseline SEM reconstruir os inputs
+  // (reset com os próprios valores: limpa o dirty sem mexer no foco).
+  const saveNow = async () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
+    }
+    if (savingRef.current) {
+      queuedRef.current = true
+      return
+    }
+    savingRef.current = true
+    try {
+      await handleSubmit(onSubmit)()
+      reset(getValues())
+    } finally {
+      savingRef.current = false
+      if (queuedRef.current) {
+        queuedRef.current = false
+        timeoutRef.current = setTimeout(() => { void saveNow() }, 300)
+      }
+    }
+  }
+
+  const scheduleSave = (delay = 500) => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    timeoutRef.current = setTimeout(() => { void saveNow() }, delay)
+  }
 
   useEffect(() => {
-    const subscription = watch((value, { name, type }) => {
-      // Ignora alterações programáticas (ex: reset após AI terminar)
-      if (!name) return;
-
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
-      }
-      timeoutRef.current = setTimeout(() => {
-        handleSubmit(onSubmit)()
-      }, 1000)
-    })
-    return () => subscription.unsubscribe()
-  }, [watch, handleSubmit])
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    }
+  }, [])
 
   // datetime-local devolve "AAAA-MM-DDTHH:mm" sem fuso. Converter AQUI (navegador,
   // que conhece o fuso local) para ISO com offset — se o servidor (UTC) converter,
@@ -216,7 +244,11 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 pb-8 relative">
+    <form
+      onSubmit={(e) => { e.preventDefault(); void saveNow(); }}
+      onBlur={() => scheduleSave()}
+      className="space-y-6 pb-8 relative"
+    >
       <div className="flex justify-between items-center mb-2">
         <div className="text-sm text-muted-foreground flex items-center h-6 transition-all">
           {isLoading ? (
@@ -323,6 +355,7 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
                       const previous = watch("coverImageUrl");
                       const next = res[0].url;
                       setValue("coverImageUrl", next);
+                      scheduleSave();
                       if (previous && previous !== next) {
                         try {
                           await removeWeddingCoverImage(weddingId, previous);
@@ -433,10 +466,11 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
                                     guests={wedding.guests || []}
                                     valueName={field.value}
                                     valueId={watchedParty[index]?.guestId || null}
-                                    onChange={(name, guestId) => {
-                                      field.onChange(name);
-                                      setValue(`partyMembers.${index}.guestId` as const, guestId, { shouldDirty: true, shouldValidate: true });
-                                    }}
+                                     onChange={(name, guestId) => {
+                                       field.onChange(name);
+                                       setValue(`partyMembers.${index}.guestId` as const, guestId, { shouldDirty: true, shouldValidate: true });
+                                       scheduleSave();
+                                     }}
                                   />
                                 )}
                               />
@@ -542,7 +576,8 @@ export function WeddingDetailsForm({ wedding, weddingId }: { wedding: any, weddi
                                       content={{ button: "Enviar foto" }}
                                       onClientUploadComplete={(res) => {
                                         field.onChange(res[0].url);
-                                        toast.success("Foto enviada! Salve as alterações.");
+                                        scheduleSave();
+                                        toast.success("Foto enviada! Salvando...");
                                       }}
                                       onUploadError={(error: Error) => {
                                         toast.error(`Erro ao enviar: ${error.message}`);
