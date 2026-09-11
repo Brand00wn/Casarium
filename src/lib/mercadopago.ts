@@ -63,7 +63,6 @@ function translateMpError(raw: string): string {
   }
   return raw;
 }
-}
 
 export async function createMpPayment(accessToken: string, input: MpPaymentInput): Promise<MpPayment> {
   return mpFetch(accessToken, "/v1/payments", {
