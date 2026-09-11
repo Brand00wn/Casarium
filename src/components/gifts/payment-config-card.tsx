@@ -21,6 +21,13 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
   const [enabled, setEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const typedKeyEnv = publicKey.trim().startsWith("TEST-")
+    ? "test"
+    : publicKey.trim().startsWith("APP_USR-")
+      ? "production"
+      : null;
+  const envMismatch = !!typedKeyEnv && !!status?.env && typedKeyEnv !== status.env;
+
   useEffect(() => {
     getPaymentConfigStatus(weddingSlug)
       .then((s) => {
@@ -43,12 +50,13 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
     try {
       await savePaymentConfig(weddingSlug, {
         ...(token.trim() ? { accessToken: token.trim() } : {}),
-        publicKey: publicKey.trim(),
+        ...(publicKey.trim() ? { publicKey: publicKey.trim() } : {}),
         passCardFeeToGuest: passFee,
         cardFeePercent: Number(feePercent) || 0,
         enabled,
       });
       setToken("");
+      setPublicKey("");
       const s = await getPaymentConfigStatus(weddingSlug);
       setStatus(s);
       toast.success("Pagamento configurado!");
@@ -66,9 +74,18 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
           <CreditCard className="w-4 h-4 text-primary" /> Receber presentes (Mercado Pago)
         </CardTitle>
         <CardDescription>
-          {status?.configured
-            ? `Conectado (${status.masked}) — o dinheiro cai direto na conta dos noivos.`
-            : "Cole o Access Token da conta Mercado Pago dos noivos para ativar o pagamento online."}
+          {status?.configured ? (
+            <span className="inline-flex items-center gap-2 flex-wrap">
+              Conectado ({status.masked}) — o dinheiro cai direto na conta dos noivos.
+              {status.env && status.env !== "unknown" && (
+                <span className={`text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${status.env === "test" ? "bg-amber-100 text-amber-800" : "bg-green-100 text-green-800"}`}>
+                  Ambiente: {status.env === "test" ? "teste" : "produção"}
+                </span>
+              )}
+            </span>
+          ) : (
+            "Cole o Access Token da conta Mercado Pago dos noivos para ativar o pagamento online."
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -87,8 +104,16 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
             <Input
               value={publicKey}
               onChange={(e) => setPublicKey(e.target.value)}
-              placeholder="APP_USR-... (opcional; sem ela, só PIX)"
+              placeholder={status?.publicKeySet ? "•••• preenchida ✓ (só digite para trocar)" : "APP_USR-... ou TEST-..."}
             />
+            {envMismatch && (
+              <p className="text-xs font-medium text-red-600">
+                ⚠️ Chave de {typedKeyEnv === "test" ? "teste" : "produção"} com token de {status.env === "test" ? "teste" : "produção"} — precisam ser do MESMO ambiente.
+              </p>
+            )}
+            {!publicKey && !status?.publicKeySet && (
+              <p className="text-xs text-muted-foreground">Sem ela, só PIX. Use a Public Key do mesmo ambiente do token.</p>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3">

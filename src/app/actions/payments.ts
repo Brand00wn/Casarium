@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/session";
-import { encryptSecret, decryptSecret, maskToken } from "@/lib/payment-crypto";
+import { encryptSecret, decryptSecret } from "@/lib/payment-crypto";
 import { createMpPayment, getMpPayment, applyCardFee } from "@/lib/mercadopago";
 import { getSiteUrl } from "@/lib/site-url";
 
@@ -27,9 +27,20 @@ export async function getPaymentConfigStatus(weddingSlug: string) {
   if (!wedding) throw new Error("Casamento não encontrado");
   const cfg = await prisma.weddingPaymentConfig.findUnique({ where: { weddingId: wedding.id } });
   if (!cfg) return { configured: false as const };
+  let env: "test" | "production" | "unknown" = "unknown";
+  let masked = "••••••••";
+  try {
+    const raw = decryptSecret(cfg.accessTokenEncrypted);
+    masked = `••••${raw.slice(-4)}`;
+    if (raw.startsWith("TEST-")) env = "test";
+    else if (raw.startsWith("APP_USR-")) env = "production";
+  } catch {
+    return { configured: false as const };
+  }
   return {
     configured: true as const,
-    masked: maskToken(decryptSecret(cfg.accessTokenEncrypted).slice(-8).padStart(8, "x")).replace(/x/g, "•"),
+    masked,
+    env,
     publicKeySet: !!cfg.publicKey,
     passCardFeeToGuest: cfg.passCardFeeToGuest,
     cardFeePercent: cfg.cardFeePercent,
@@ -50,10 +61,15 @@ export async function savePaymentConfig(weddingSlug: string, data: {
   if (!wedding) throw new Error("Casamento não encontrado");
 
   const existing = await prisma.weddingPaymentConfig.findUnique({ where: { weddingId: wedding.id } });
-  const encrypted = data.accessToken?.trim()
-    ? encryptSecret(data.accessToken.trim())
+  const tokenTrimmed = data.accessToken?.trim() || "";
+  const keyTrimmed = data.publicKey?.trim() || "";
+  const encrypted = tokenTrimmed
+    ? encryptSecret(tokenTrimmed)
     : existing?.accessTokenEncrypted;
   if (!encrypted) throw new Error("Informe o Access Token do Mercado Pago.");
+  if (tokenTrimmed && !/^(TEST-|APP_USR-)/.test(tokenTrimmed)) {
+    throw new Error("Access Token inválido — deve começar com TEST- ou APP_USR-.");
+  }
 
   const fee = data.cardFeePercent === undefined
     ? (existing?.cardFeePercent ?? 4.98)
@@ -64,14 +80,15 @@ export async function savePaymentConfig(weddingSlug: string, data: {
     create: {
       weddingId: wedding.id,
       accessTokenEncrypted: encrypted,
-      publicKey: data.publicKey?.trim() || existing?.publicKey || null,
+      publicKey: keyTrimmed || existing?.publicKey || null,
       passCardFeeToGuest: data.passCardFeeToGuest ?? existing?.passCardFeeToGuest ?? false,
       cardFeePercent: fee,
       enabled: data.enabled ?? existing?.enabled ?? true,
     },
     update: {
-      ...(encrypted && { accessTokenEncrypted: encrypted }),
-      ...(data.publicKey !== undefined && { publicKey: data.publicKey.trim() || null }),
+      ...(tokenTrimmed ? { accessTokenEncrypted: encrypted } : {}),
+      // Campo vazio = manter a chave atual (nunca apaga sem querer)
+      ...(keyTrimmed ? { publicKey: keyTrimmed } : {}),
       ...(data.passCardFeeToGuest !== undefined && { passCardFeeToGuest: data.passCardFeeToGuest }),
       cardFeePercent: fee,
       ...(data.enabled !== undefined && { enabled: data.enabled }),
