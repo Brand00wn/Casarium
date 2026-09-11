@@ -89,6 +89,17 @@ export default async function WeddingSitePage({ params }: { params: Promise<{ we
 
   const initialMessages = await getMessages(wedding.slug)
   const siteGuest = await getSiteGuestBySlug(wedding.slug)
+
+  const giftPreview = await prisma.gift.findMany({
+    where: { weddingId: wedding.id },
+    select: { id: true, name: true, price: true, imageUrl: true },
+    orderBy: { createdAt: "desc" },
+    take: 8,
+  });
+  const featuredGifts = [
+    ...giftPreview.filter(g => g.imageUrl),
+    ...giftPreview.filter(g => !g.imageUrl),
+  ].slice(0, 4);
   const eventDate = wedding.ceremonyDate ?? wedding.date
 
   const eventHour = eventDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
@@ -371,20 +382,47 @@ export default async function WeddingSitePage({ params }: { params: Promise<{ we
       )}
 
       {/* Presentes */}
-      <section className="mx-auto max-w-3xl px-4 py-20 text-center space-y-6">
+      <section className="mx-auto max-w-5xl px-4 py-20 text-center space-y-8">
         <div className="mx-auto w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
           <Gift className="w-6 h-6 text-primary" />
         </div>
-        <Eyebrow>Lista de presentes</Eyebrow>
-        <h2 className="font-display text-4xl md:text-5xl font-medium">Sua presença é o maior presente</h2>
-        <p className="text-muted-foreground font-light text-lg">
-          Mas se quiser nos mimar um pouco mais, preparamos uma lista com carinho.
-        </p>
+        <div className="space-y-4">
+          <Eyebrow>Lista de presentes</Eyebrow>
+          <h2 className="font-display text-4xl md:text-5xl font-medium">Sua presença é o maior presente</h2>
+          <p className="text-muted-foreground font-light text-lg">
+            Mas se quiser nos mimar um pouco mais, preparamos uma lista com carinho.
+          </p>
+        </div>
+        {featuredGifts.length > 0 && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 text-left">
+            {featuredGifts.map((g) => (
+              <Link
+                key={g.id}
+                href={`/site/${wedding.slug}/presentes`}
+                className="group overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
+              >
+                {g.imageUrl ? (
+                  <SafeImage src={g.imageUrl} alt={g.name} className="w-full aspect-square bg-muted" imgClassName="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                ) : (
+                  <div className="w-full aspect-square bg-primary/10 flex items-center justify-center">
+                    <Gift className="w-12 h-12 text-primary/40" />
+                  </div>
+                )}
+                <div className="p-4">
+                  <p className="font-display text-lg leading-tight truncate">{g.name}</p>
+                  <p className="mt-1 font-bold text-primary">
+                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(g.price)}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
         <Link
           href={`/site/${wedding.slug}/presentes`}
           className="inline-flex items-center justify-center h-12 px-8 rounded-full bg-primary text-primary-foreground text-sm font-semibold uppercase tracking-[0.12em] hover:bg-primary/90 transition-colors"
         >
-          Ver lista de presentes
+          Ver lista completa
         </Link>
       </section>
 
