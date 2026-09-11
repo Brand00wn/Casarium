@@ -36,7 +36,11 @@ async function mpFetch(accessToken: string, path: string, init?: RequestInit) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const msg = data?.message || data?.error || `HTTP ${res.status}`;
+    console.error("[MP API] Erro", res.status, path, JSON.stringify(data).slice(0, 1000));
+    const causes = Array.isArray(data?.cause)
+      ? data.cause.map((c: any) => c?.description || c?.code).filter(Boolean).join(" | ")
+      : "";
+    const msg = causes || data?.message || data?.error || `HTTP ${res.status}`;
     throw new Error(`Mercado Pago: ${msg}`);
   }
   return data;
