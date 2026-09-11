@@ -47,6 +47,7 @@ export default function GiftGrid({
   const [selectedGift, setSelectedGift] = useState<GiftWithCategories | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [sort, setSort] = useState<"recent" | "quota-asc" | "quota-desc" | "total-asc" | "total-desc">("recent");
 
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
@@ -286,12 +287,23 @@ export default function GiftGrid({
     }
   };
 
-  const visibleGifts = gifts.filter(g => categoryFilter === "all" || g.categories?.some(c => c.id === categoryFilter));
+  const visibleGifts = gifts
+    .filter(g => categoryFilter === "all" || g.categories?.some(c => c.id === categoryFilter))
+    .sort((a, b) => {
+      switch (sort) {
+        case "quota-asc": return (a.price / a.quotaCount) - (b.price / b.quotaCount);
+        case "quota-desc": return (b.price / b.quotaCount) - (a.price / a.quotaCount);
+        case "total-asc": return a.price - b.price;
+        case "total-desc": return b.price - a.price;
+        default: return 0;
+      }
+    });
 
   return (
     <>
-      {categories.length > 0 && (
-        <div className="flex flex-wrap items-center justify-center gap-2">
+      <div className="flex flex-col items-center gap-3">
+        {categories.length > 0 && (
+          <div className="flex flex-wrap items-center justify-center gap-2">
           <button
             type="button"
             onClick={() => setCategoryFilter("all")}
@@ -312,6 +324,22 @@ export default function GiftGrid({
           ))}
         </div>
       )}
+        <div className="flex items-center gap-2 text-sm">
+          <label htmlFor="gift-sort" className="text-muted-foreground whitespace-nowrap">Ordenar:</label>
+          <select
+            id="gift-sort"
+            value={sort}
+            onChange={(e) => setSort(e.target.value as typeof sort)}
+            className="h-9 rounded-full border border-border/70 bg-card px-4 text-[13px] font-semibold focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+          >
+            <option value="recent">Mais recentes</option>
+            <option value="quota-asc">Menor valor da cota</option>
+            <option value="quota-desc">Maior valor da cota</option>
+            <option value="total-asc">Menor valor total</option>
+            <option value="total-desc">Maior valor total</option>
+          </select>
+        </div>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {visibleGifts.map((gift) => {
           const sold = soldOf(gift);
