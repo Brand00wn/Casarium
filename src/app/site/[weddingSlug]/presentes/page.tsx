@@ -3,6 +3,7 @@ import { getSiteGuestBySlug } from "@/lib/site-guest";
 import { notFound } from "next/navigation";
 import { PageHero, CoupleNames } from "@/components/site/site-ui";
 import GiftGrid from "./GiftGrid";
+import { QuotaExplainer } from "./quota-explainer";
 
 export default async function GiftsSitePage({
   params,
@@ -42,7 +43,8 @@ export default async function GiftsSitePage({
           />
         </div>
       </div>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+        <QuotaExplainer gifts={gifts.map(g => ({ id: g.id, name: g.name, price: g.price, quotaCount: g.quotaCount }))} />
         {gifts.length === 0 ? (
           <div className="text-center text-muted-foreground font-light mt-12">
             A lista de presentes ainda não foi montada.
