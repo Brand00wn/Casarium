@@ -250,6 +250,9 @@ export default function GiftGrid({
               paymentMethod: "CREDIT_CARD",
               cardToken: cardFormData.token,
               cardPaymentMethodId: cardFormData.payment_method_id,
+              cardIdentification: cardFormData.payer?.identification
+                ? { type: cardFormData.payer.identification.type || "CPF", number: String(cardFormData.payer.identification.number || "") }
+                : undefined,
               installments: Number(cardFormData.installments) || 1,
               ...(siteGuest ? { guestId: siteGuest.id } : {}),
             }).then((res: any) => {

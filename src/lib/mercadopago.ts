@@ -6,7 +6,7 @@ export type MpPaymentInput = {
   transactionAmount: number;
   description: string;
   paymentMethodId: string; // "pix" | "master" | "visa" | ...
-  payer: { email: string; firstName?: string; lastName?: string };
+  payer: { email: string; firstName?: string; lastName?: string; identification?: { type: string, number: string } };
   token?: string; // card_token do Brick (cartão)
   installments?: number;
   externalReference: string; // nosso transactionId
@@ -77,6 +77,9 @@ export async function createMpPayment(accessToken: string, input: MpPaymentInput
         email: input.payer.email,
         first_name: input.payer.firstName,
         last_name: input.payer.lastName,
+        ...(input.payer.identification?.number
+          ? { identification: { type: input.payer.identification.type || "CPF", number: input.payer.identification.number.replace(/\D/g, "") } }
+          : {}),
       },
       external_reference: input.externalReference,
       notification_url: input.notificationUrl,

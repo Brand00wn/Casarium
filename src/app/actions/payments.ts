@@ -117,6 +117,7 @@ type CheckoutInput = {
   paymentMethod: "PIX" | "CREDIT_CARD";
   cardToken?: string;
   cardPaymentMethodId?: string;
+  cardIdentification?: { type: string, number: string };
   installments?: number;
 };
 
@@ -193,7 +194,7 @@ async function createQuotaPaymentInner(weddingSlug: string, input: CheckoutInput
       transactionAmount: total,
       description: `${quantity}x ${gift.name} — ${wedding.partner1Name} & ${wedding.partner2Name}`,
       paymentMethodId: input.paymentMethod === "PIX" ? "pix" : (input.cardPaymentMethodId || "master"),
-      payer: { email: input.guestEmail.trim() },
+      payer: { email: input.guestEmail.trim(), identification: input.cardIdentification },
       token: input.cardToken,
       installments: input.installments || 1,
       externalReference: transaction.id,
