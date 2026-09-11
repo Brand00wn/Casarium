@@ -410,7 +410,7 @@ export default function GiftGrid({
       )}
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Presentear os Noivos</DialogTitle>
           </DialogHeader>
