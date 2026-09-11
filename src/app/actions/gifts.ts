@@ -226,10 +226,32 @@ export async function getTransactions(weddingSlug: string) {
 }
 
 export async function simulateCheckout(weddingSlug: string, giftId: string | null,
-data: { amount: number; paymentMethod: "PIX" | "CREDIT_CARD"; guestName: string; guestMessage?: string; guestId?: string }) {
+data: { amount: number; paymentMethod: "PIX" | "CREDIT_CARD"; guestName: string; guestMessage?: string; guestId?: string; quantity?: number }) {
+  const gift = giftId ? await prisma.gift.findUnique({ where: { id: giftId } }) : null;
+  if (giftId && !gift) throw new Error("Presente não encontrado");
+
+  // Cotas: valida o restante e recalcula o valor no servidor (não confia no cliente)
+  let quantity = Math.max(1, Math.floor(data.quantity || 1));
+  let amount = data.amount;
+  if (gift) {
+    const soldAgg = await prisma.transaction.aggregate({
+      where: { giftId: gift.id, status: "PAID" },
+      _sum: { quantity: true },
+    });
+    const sold = soldAgg._sum.quantity || 0;
+    const remaining = gift.quotaCount - sold;
+    if (remaining <= 0) throw new Error("Este presente já foi completamente presenteado! 🎉");
+    if (quantity > remaining) {
+      throw new Error(`Restam apenas ${remaining} de ${gift.quotaCount} cotas para este presente.`);
+    }
+    const quotaValue = gift.price / gift.quotaCount;
+    amount = Math.round(quantity * quotaValue * 100) / 100;
+  }
+
   const transaction = await prisma.transaction.create({
     data: {
-      amount: data.amount,
+      amount,
+      quantity,
       status: "PAID",
       paymentMethod: data.paymentMethod,
       guestName: data.guestName,
@@ -242,4 +264,18 @@ data: { amount: number; paymentMethod: "PIX" | "CREDIT_CARD"; guestName: string;
   revalidatePath(`/${weddingSlug}/presentes`);
   revalidatePath(`/site/${weddingSlug}/presentes`);
   return transaction;
+}
+
+/** Cotas já presenteadas (PAID) por presente do casamento. */
+export async function getGiftQuotaSold(weddingSlug: string) {
+  const groups = await prisma.transaction.groupBy({
+    by: ["giftId"],
+    where: { wedding: { slug: weddingSlug }, status: "PAID", giftId: { not: null } },
+    _sum: { quantity: true },
+  });
+  const map: Record<string, number> = {};
+  for (const g of groups) {
+    if (g.giftId) map[g.giftId] = g._sum.quantity || 0;
+  }
+  return map;
 }

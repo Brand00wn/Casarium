@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getSiteGuestBySlug } from "@/lib/site-guest";
+import { getGiftQuotaSold } from "@/app/actions/gifts";
 import { notFound } from "next/navigation";
 import { PageHero, CoupleNames } from "@/components/site/site-ui";
 import GiftGrid from "./GiftGrid";
@@ -31,6 +32,7 @@ export default async function GiftsSitePage({
   });
 
   const siteGuest = await getSiteGuestBySlug(weddingSlug);
+  const soldByGift = await getGiftQuotaSold(weddingSlug);
 
   return (
     <div className="pb-16">
@@ -53,6 +55,7 @@ export default async function GiftsSitePage({
           <GiftGrid
             gifts={gifts}
             categories={categories}
+            soldByGift={soldByGift}
             weddingId={wedding.id}
             weddingSlug={wedding.slug}
             siteGuest={siteGuest ? { id: siteGuest.id, name: siteGuest.name } : null}

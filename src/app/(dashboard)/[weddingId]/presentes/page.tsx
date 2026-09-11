@@ -183,6 +183,13 @@ export default function GiftsDashboardPage({ params }: { params: Promise<{ weddi
     setSelectedGifts(prev => prev.includes(id) ? prev.filter(gid => gid !== id) : [...prev, id]);
   };
 
+  const soldByGiftId = transactions
+    .filter((t) => t.status === "PAID" && t.giftId)
+    .reduce((acc: Record<string, number>, t) => {
+      acc[t.giftId!] = (acc[t.giftId!] || 0) + (t.quantity || 1);
+      return acc;
+    }, {});
+
   const totalArrecadado = transactions
     .filter((t) => t.status === "PAID")
     .reduce((sum, t) => sum + t.amount, 0);
@@ -482,7 +489,15 @@ export default function GiftsDashboardPage({ params }: { params: Promise<{ weddi
                       <TableCell>
                         {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(gift.price)}
                       </TableCell>
-                      <TableCell>{gift.quotaCount}</TableCell>
+                      <TableCell>
+                        {gift.quotaCount > 1 ? (
+                          <span className="text-xs font-medium whitespace-nowrap">
+                            {Math.min(soldByGiftId[gift.id] || 0, gift.quotaCount)}/{gift.quotaCount} vendidas
+                          </span>
+                        ) : (
+                          gift.quotaCount
+                        )}
+                      </TableCell>
                       <TableCell className="text-right whitespace-nowrap">
                         <Button variant="ghost" size="icon" onClick={() => handleEdit(gift)}>
                           <Edit2 className="w-4 h-4" />

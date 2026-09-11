@@ -17,24 +17,27 @@ import {
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { SafeImage } from "@/components/ui/safe-image";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { QrCode, CreditCard, Gift as GiftIcon } from "lucide-react";
+import { QrCode, CreditCard, Gift as GiftIcon, Minus, Plus, PartyPopper } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 
 type GiftWithCategories = Gift & { categories?: GiftCategory[] };
 
 export default function GiftGrid({
   gifts,
   categories,
+  soldByGift,
   weddingId,
   weddingSlug,
   siteGuest,
 }: {
   gifts: GiftWithCategories[];
   categories: GiftCategory[];
+  soldByGift: Record<string, number>;
   weddingId: string;
   weddingSlug: string;
   siteGuest?: { id: string, name: string } | null;
 }) {
-  const [selectedGift, setSelectedGift] = useState<Gift | null>(null);
+  const [selectedGift, setSelectedGift] = useState<GiftWithCategories | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
@@ -42,12 +45,19 @@ export default function GiftGrid({
   const [guestMessage, setGuestMessage] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"PIX" | "CREDIT_CARD">("PIX");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [quotas, setQuotas] = useState(1);
 
-  const openCheckout = (gift: Gift) => {
+  const soldOf = (gift: GiftWithCategories) => Math.min(soldByGift[gift.id] || 0, gift.quotaCount);
+  const remainingOf = (gift: GiftWithCategories) => Math.max(gift.quotaCount - soldOf(gift), 0);
+  const quotaValueOf = (gift: GiftWithCategories) => gift.price / gift.quotaCount;
+  const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+
+  const openCheckout = (gift: GiftWithCategories) => {
     setSelectedGift(gift);
     setGuestName(siteGuest?.name || "");
     setGuestMessage("");
     setPaymentMethod("PIX");
+    setQuotas(1);
     setIsOpen(true);
   };
 
@@ -69,17 +79,23 @@ export default function GiftGrid({
 
     setIsSubmitting(true);
     try {
+      const qty = selectedGift!.quotaCount > 1 ? quotas : 1;
       await simulateCheckout(weddingSlug, selectedGift?.id || null, {
         guestName,
         guestMessage,
         amount: selectedGift!.price,
         paymentMethod,
+        quantity: qty,
         ...(siteGuest ? { guestId: siteGuest.id } : {}),
       });
-      toast.success("Pagamento realizado com sucesso! Muito obrigado pelo presente.");
+      toast.success(
+        selectedGift!.quotaCount > 1
+          ? `${qty} ${qty === 1 ? "cota presenteada" : "cotas presenteadas"} com sucesso! Muito obrigado.`
+          : "Pagamento realizado com sucesso! Muito obrigado pelo presente."
+      );
       setIsOpen(false);
-    } catch (error) {
-      toast.error("Ocorreu um erro ao processar o pagamento.");
+    } catch (error: any) {
+      toast.error(error.message || "Ocorreu um erro ao processar o pagamento.");
     } finally {
       setIsSubmitting(false);
     }
@@ -112,7 +128,12 @@ export default function GiftGrid({
         </div>
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {visibleGifts.map((gift) => (
+        {visibleGifts.map((gift) => {
+          const sold = soldOf(gift);
+          const remaining = remainingOf(gift);
+          const complete = remaining <= 0;
+          const pct = Math.round((sold / gift.quotaCount) * 100);
+          return (
           <Card key={gift.id} className="group overflow-hidden flex flex-col rounded-2xl border-border/70 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
             {gift.imageUrl ? (
               <SafeImage src={gift.imageUrl} alt={gift.name} className="w-full h-52 bg-muted" imgClassName="w-full h-full object-cover" />
@@ -134,19 +155,40 @@ export default function GiftGrid({
                 </div>
               )}
             </CardHeader>
-            <CardContent className="flex-grow">
-              <p className="text-sm text-muted-foreground font-light mb-4">{gift.description}</p>
+            <CardContent className="flex-grow space-y-3">
+              <p className="text-sm text-muted-foreground font-light">{gift.description}</p>
+              {gift.quotaCount > 1 ? (
+                <div className="space-y-1.5">
+                  <Progress value={pct} className="h-2" />
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {complete ? (
+                      <span className="text-green-700 font-semibold inline-flex items-center gap-1">
+                        <PartyPopper className="w-3.5 h-3.5" /> Presente completo!
+                      </span>
+                    ) : (
+                      <>{sold} de {gift.quotaCount} cotas presenteadas · {brl(quotaValueOf(gift))} cada</>
+                    )}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs font-medium text-muted-foreground">Cota única · valor total</p>
+              )}
               <p className="text-2xl font-bold text-primary">
-                {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(gift.price)}
+                {brl(gift.price)}
               </p>
             </CardContent>
             <CardFooter>
-              <Button className="w-full rounded-full h-11 text-sm font-semibold uppercase tracking-[0.1em]" onClick={() => openCheckout(gift)}>
-                Presentear
+              <Button
+                className="w-full rounded-full h-11 text-sm font-semibold uppercase tracking-[0.1em]"
+                disabled={complete}
+                onClick={() => openCheckout(gift)}
+              >
+                {complete ? "Completo 🎉" : "Presentear"}
               </Button>
             </CardFooter>
           </Card>
-        ))}
+          );
+        })}
       </div>
       {visibleGifts.length === 0 && (
         <p className="text-center text-muted-foreground font-light py-12">
@@ -161,14 +203,45 @@ export default function GiftGrid({
           </DialogHeader>
           <div className="space-y-6 py-4">
             {selectedGift && (
-              <div className="bg-muted p-4 rounded-lg flex justify-between items-center">
-                <div>
-                  <p className="font-semibold">{selectedGift.name}</p>
-                  <p className="text-sm text-muted-foreground">Valor do presente</p>
+              <div className="bg-muted p-4 rounded-lg space-y-3">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="font-semibold">{selectedGift.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedGift.quotaCount > 1
+                        ? `${brl(quotaValueOf(selectedGift))} por cota · restam ${remainingOf(selectedGift)} de ${selectedGift.quotaCount}`
+                        : "Cota única · valor total"}
+                    </p>
+                  </div>
+                  <p className="font-bold text-lg">
+                    {brl(selectedGift.price)}
+                  </p>
                 </div>
-                <p className="font-bold text-lg">
-                  {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(selectedGift.price)}
-                </p>
+                {selectedGift.quotaCount > 1 && (
+                  <div className="flex items-center justify-between gap-3 bg-background rounded-lg border p-3">
+                    <span className="text-sm font-medium">Quantas cotas?</span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button" variant="outline" size="icon" className="h-8 w-8 rounded-full"
+                        disabled={quotas <= 1}
+                        onClick={() => setQuotas(q => Math.max(1, q - 1))}
+                      >
+                        <Minus className="w-4 h-4" />
+                      </Button>
+                      <span className="min-w-16 text-center font-bold text-lg tabular-nums">{quotas}</span>
+                      <Button
+                        type="button" variant="outline" size="icon" className="h-8 w-8 rounded-full"
+                        disabled={quotas >= remainingOf(selectedGift)}
+                        onClick={() => setQuotas(q => Math.min(remainingOf(selectedGift), q + 1))}
+                      >
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <span className="font-bold text-primary whitespace-nowrap">
+                      {brl(quotaValueOf(selectedGift) * quotas)}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
