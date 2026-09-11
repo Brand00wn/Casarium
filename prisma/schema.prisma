@@ -135,6 +135,24 @@ model Wedding {
   taskCategories        TaskCategory[]
   tasks                 Task[]
   messagingConfig       WeddingMessagingConfig?
+  paymentConfig         WeddingPaymentConfig?
+}
+
+// Pagamento por casamento (Fase 1: Mercado Pago transparente).
+// O dinheiro cai direto na conta dos noivos — o token fica criptografado.
+model WeddingPaymentConfig {
+  id                   String   @id @default(uuid())
+  weddingId            String   @unique
+  wedding              Wedding  @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  provider             String   @default("MERCADOPAGO")
+  accessTokenEncrypted String   @db.Text
+  publicKey            String?
+  // Quem absorve a taxa do cartão? false = noivos absorvem (default), true = repassa ao convidado
+  passCardFeeToGuest   Boolean  @default(false)
+  cardFeePercent       Float    @default(4.98)
+  pixFeePercent        Float    @default(0.99)
+  enabled              Boolean  @default(true)
+  updatedAt            DateTime @updatedAt
 }
 
 // Automação de disparos WhatsApp (convites + lembretes de RSVP)
@@ -358,6 +376,7 @@ model Transaction {
   guestId       String?
   giftId        String?
   weddingId     String
+  expiresAt     DateTime?
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   gift          Gift?             @relation(fields: [giftId], references: [id])

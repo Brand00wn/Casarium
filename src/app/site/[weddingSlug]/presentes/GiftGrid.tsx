@@ -1,8 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Gift, GiftCategory } from "@prisma/client";
 import { simulateCheckout } from "@/app/actions/gifts";
+import {
+  createQuotaPayment,
+  getCheckoutStatus,
+  isPaymentConfigured,
+  getPaymentPublicKey,
+} from "@/app/actions/payments";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,23 +49,52 @@ export default function GiftGrid({
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
   const [guestName, setGuestName] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
   const [guestMessage, setGuestMessage] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"PIX" | "CREDIT_CARD">("PIX");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [quotas, setQuotas] = useState(1);
+
+  // Pagamento real (MP) vs simulação (casamento sem credencial)
+  const router = useRouter();
+  const [payMode, setPayMode] = useState<"checking" | "mp" | "simulated">("checking");
+  const [mpCard, setMpCard] = useState(false);
+  const [cardFee, setCardFee] = useState({ pass: false, percent: 4.98 });
+  const [publicKey, setPublicKey] = useState<string | null>(null);
+  const [pix, setPix] = useState<{ qrCodeBase64: string | null, copyPaste: string | null, transactionId: string, amount: number } | null>(null);
+  const brickController = useRef<any>(null);
 
   const soldOf = (gift: GiftWithCategories) => Math.min(soldByGift[gift.id] || 0, gift.quotaCount);
   const remainingOf = (gift: GiftWithCategories) => Math.max(gift.quotaCount - soldOf(gift), 0);
   const quotaValueOf = (gift: GiftWithCategories) => gift.price / gift.quotaCount;
   const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
-  const openCheckout = (gift: GiftWithCategories) => {
+  const openCheckout = async (gift: GiftWithCategories) => {
     setSelectedGift(gift);
     setGuestName(siteGuest?.name || "");
+    setGuestEmail("");
     setGuestMessage("");
     setPaymentMethod("PIX");
     setQuotas(1);
+    setPix(null);
+    setPayMode("checking");
     setIsOpen(true);
+    try {
+      const cfg = await isPaymentConfigured(weddingSlug);
+      if (cfg.configured) {
+        setPayMode("mp");
+        setMpCard(cfg.hasCard);
+        setCardFee({ pass: cfg.passCardFeeToGuest, percent: cfg.cardFeePercent });
+        if (cfg.hasCard) {
+          const { publicKey: pk } = await getPaymentPublicKey(weddingSlug);
+          setPublicKey(pk);
+        }
+      } else {
+        setPayMode("simulated");
+      }
+    } catch {
+      setPayMode("simulated");
+    }
   };
 
   const handleCheckout = async () => {
@@ -98,6 +134,155 @@ export default function GiftGrid({
       toast.error(error.message || "Ocorreu um erro ao processar o pagamento.");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const onPaidSuccess = (msg: string) => {
+    toast.success(msg);
+    setIsOpen(false);
+    setPix(null);
+    router.refresh();
+  };
+
+  const checkoutQty = () => (selectedGift && selectedGift.quotaCount > 1 ? quotas : 1);
+  const checkoutBase = () => (selectedGift ? quotaValueOf(selectedGift) * checkoutQty() : 0);
+  const cardFeeValue = () => (cardFee.pass ? Math.round(checkoutBase() * (cardFee.percent / 100) * 100) / 100 : 0);
+  const checkoutTotal = () => Math.round((checkoutBase() + (paymentMethod === "CREDIT_CARD" ? cardFeeValue() : 0)) * 100) / 100;
+
+  const validGuest = () => {
+    if (!guestName.trim()) {
+      toast.error("Por favor, informe seu nome.");
+      return false;
+    }
+    if (!guestEmail.trim() || !/^\S+@\S+\.\S+$/.test(guestEmail)) {
+      toast.error("Informe um e-mail válido para o pagamento.");
+      return false;
+    }
+    return true;
+  };
+
+  const handleGeneratePix = async () => {
+    if (!selectedGift || !validGuest()) return;
+    setIsSubmitting(true);
+    try {
+      const res = await createQuotaPayment(weddingSlug, {
+        giftId: selectedGift.id,
+        quantity: checkoutQty(),
+        guestName,
+        guestEmail: guestEmail.trim(),
+        guestMessage,
+        paymentMethod: "PIX",
+        ...(siteGuest ? { guestId: siteGuest.id } : {}),
+      });
+      if (res.status === "pending") {
+        setPix({
+          qrCodeBase64: res.qrCodeBase64,
+          copyPaste: res.copyPaste,
+          transactionId: res.transactionId,
+          amount: res.amount,
+        });
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao gerar PIX.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Polling do PIX
+  useEffect(() => {
+    if (!pix || !isOpen) return;
+    const t = setInterval(async () => {
+      try {
+        const s = await getCheckoutStatus(pix.transactionId);
+        if (s.status === "PAID") {
+          clearInterval(t);
+          onPaidSuccess("Pagamento confirmado! Muito obrigado pelo presente. 🎉");
+        } else if (s.status === "FAILED") {
+          clearInterval(t);
+          toast.error("Pagamento expirado ou recusado. Gere um novo PIX.");
+          setPix(null);
+        }
+      } catch { /* tenta de novo no próximo ciclo */ }
+    }, 5000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pix, isOpen]);
+
+  // Brick de cartão do Mercado Pago
+  useEffect(() => {
+    if (!isOpen || payMode !== "mp" || paymentMethod !== "CREDIT_CARD" || !publicKey || !selectedGift) return;
+
+    const mount = () => {
+      const w = window as any;
+      if (!w.MercadoPago) {
+        if (!document.querySelector('script[src="https://sdk.mercadopago.com/js/v2"]')) {
+          const s = document.createElement("script");
+          s.src = "https://sdk.mercadopago.com/js/v2";
+          s.onload = mount;
+          document.body.appendChild(s);
+        } else {
+          setTimeout(mount, 300);
+        }
+        return;
+      }
+      try { brickController.current?.unmount(); } catch { /* noop */ }
+      const mp = new w.MercadoPago(publicKey, { locale: "pt-BR" });
+      const bricks = mp.bricks();
+      bricks.create("cardPayment", "mp-card-brick", {
+        initialization: { amount: checkoutTotal() },
+        callbacks: {
+          onReady: () => {},
+          onSubmit: (cardFormData: any) => new Promise<void>((resolve, reject) => {
+            if (!validGuest()) return reject();
+            setIsSubmitting(true);
+            createQuotaPayment(weddingSlug, {
+              giftId: selectedGift!.id,
+              quantity: checkoutQty(),
+              guestName,
+              guestEmail: guestEmail.trim(),
+              guestMessage,
+              paymentMethod: "CREDIT_CARD",
+              cardToken: cardFormData.token,
+              cardPaymentMethodId: cardFormData.payment_method_id,
+              installments: Number(cardFormData.installments) || 1,
+              ...(siteGuest ? { guestId: siteGuest.id } : {}),
+            }).then((res: any) => {
+              setIsSubmitting(false);
+              if (res.status === "approved") {
+                resolve();
+                onPaidSuccess("Pagamento aprovado! Muito obrigado pelo presente. 🎉");
+              } else {
+                reject();
+                toast.error("Cartão recusado — confira os dados ou tente outro cartão.");
+              }
+            }).catch((e: any) => {
+              setIsSubmitting(false);
+              reject();
+              toast.error(e.message || "Erro no pagamento.");
+            });
+          }),
+          onError: (e: any) => { console.error("MP Brick:", e); },
+        },
+      }).then((c: any) => { brickController.current = c; }).catch((e: any) => console.error("MP Brick:", e));
+    };
+
+    const t = setTimeout(mount, 50);
+    return () => {
+      clearTimeout(t);
+      try { brickController.current?.unmount(); } catch { /* noop */ }
+      brickController.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, payMode, paymentMethod, publicKey, selectedGift?.id, quotas]);
+
+  const copyPix = async () => {
+    if (!pix?.copyPaste) return;
+    try {
+      await navigator.clipboard.writeText(pix.copyPaste);
+      toast.success("Código PIX copiado!");
+    } catch {
+      toast.error("Não foi possível copiar. Selecione o código manualmente.");
     }
   };
 
@@ -256,6 +441,19 @@ export default function GiftGrid({
                 />
               </div>
 
+              {payMode === "mp" && (
+                <div className="space-y-2">
+                  <Label htmlFor="email">Seu e-mail (para o pagamento)</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={guestEmail}
+                    onChange={(e) => setGuestEmail(e.target.value)}
+                    placeholder="voce@email.com"
+                  />
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="message">Mensagem (opcional)</Label>
                 <Textarea
@@ -268,7 +466,7 @@ export default function GiftGrid({
 
               <div className="space-y-2">
                 <Label>Forma de Pagamento</Label>
-                <RadioGroup value={paymentMethod} onValueChange={(v: "PIX" | "CREDIT_CARD") => setPaymentMethod(v)} className="flex gap-4">
+                <RadioGroup value={paymentMethod} onValueChange={(v: "PIX" | "CREDIT_CARD") => { setPaymentMethod(v); setPix(null); }} className="flex gap-4">
                   <div className="flex items-center space-x-2 border p-3 rounded-md flex-1 cursor-pointer">
                     <RadioGroupItem value="PIX" id="pix" />
                     <Label htmlFor="pix" className="flex items-center gap-2 cursor-pointer">
@@ -284,7 +482,20 @@ export default function GiftGrid({
                 </RadioGroup>
               </div>
 
-              {paymentMethod === "CREDIT_CARD" && (
+              {payMode === "checking" && (
+                <p className="text-sm text-center text-muted-foreground">Carregando formas de pagamento...</p>
+              )}
+
+              {payMode === "simulated" && paymentMethod === "PIX" && (
+                <div className="flex flex-col items-center justify-center space-y-2 bg-muted/50 p-6 rounded-lg border">
+                  <QrCode className="w-24 h-24 text-primary" />
+                  <p className="text-sm text-center text-muted-foreground">
+                    Pagamento demonstrativo — os noivos ainda não ativaram o recebimento online.
+                  </p>
+                </div>
+              )}
+
+              {payMode === "simulated" && paymentMethod === "CREDIT_CARD" && (
                 <div className="space-y-4 bg-muted/50 p-4 rounded-lg border">
                   <div className="space-y-2">
                     <Label htmlFor="cc-name">Nome no Cartão</Label>
@@ -307,19 +518,81 @@ export default function GiftGrid({
                 </div>
               )}
 
-              {paymentMethod === "PIX" && (
+              {payMode === "mp" && paymentMethod === "PIX" && !pix && (
                 <div className="flex flex-col items-center justify-center space-y-2 bg-muted/50 p-6 rounded-lg border">
                   <QrCode className="w-24 h-24 text-primary" />
                   <p className="text-sm text-center text-muted-foreground">
-                    Ao confirmar, você gerará o PIX Copia e Cola para pagamento.
+                    Ao confirmar, geramos o PIX com QR Code e copia e cola.
                   </p>
+                </div>
+              )}
+
+              {payMode === "mp" && paymentMethod === "PIX" && pix && (
+                <div className="flex flex-col items-center space-y-3 bg-muted/50 p-6 rounded-lg border">
+                  {pix.qrCodeBase64 ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={`data:image/png;base64,${pix.qrCodeBase64}`} alt="QR Code PIX" className="w-52 h-52 rounded-lg bg-white p-2" />
+                  ) : (
+                    <QrCode className="w-24 h-24 text-primary" />
+                  )}
+                  <p className="font-bold text-xl">
+                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(pix.amount)}
+                  </p>
+                  {pix.copyPaste && (
+                    <>
+                      <p className="text-xs text-muted-foreground break-all max-h-20 overflow-y-auto bg-background p-2 rounded border w-full">
+                        {pix.copyPaste}
+                      </p>
+                      <Button type="button" variant="outline" onClick={copyPix} className="w-full">
+                        Copiar código PIX
+                      </Button>
+                    </>
+                  )}
+                  <p className="text-xs text-center text-muted-foreground animate-pulse">
+                    Aguardando pagamento... confirmamos automaticamente aqui.
+                  </p>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setPix(null)}>
+                    Gerar outro código
+                  </Button>
+                </div>
+              )}
+
+              {payMode === "mp" && paymentMethod === "CREDIT_CARD" && !mpCard && (
+                <div className="p-4 rounded-lg border bg-muted/50 text-sm text-center text-muted-foreground">
+                  Cartão indisponível no momento — escolha o PIX. 💳
+                </div>
+              )}
+
+              {payMode === "mp" && paymentMethod === "CREDIT_CARD" && mpCard && (
+                <div className="space-y-2">
+                  {cardFee.pass && cardFee.percent > 0 && selectedGift && (
+                    <p className="text-xs text-muted-foreground text-center">
+                      Total com taxa do cartão ({cardFee.percent}%):{" "}
+                      <strong className="text-foreground">
+                        {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(checkoutTotal())}
+                      </strong>
+                    </p>
+                  )}
+                  <div id="mp-card-brick" className="min-h-[200px]" />
                 </div>
               )}
             </div>
 
-            <Button onClick={handleCheckout} className="w-full" size="lg" disabled={isSubmitting}>
-              {isSubmitting ? "Processando..." : "Confirmar Pagamento"}
-            </Button>
+            {payMode === "simulated" && (
+              <Button onClick={handleCheckout} className="w-full" size="lg" disabled={isSubmitting}>
+                {isSubmitting ? "Processando..." : "Confirmar Pagamento"}
+              </Button>
+            )}
+            {payMode === "mp" && paymentMethod === "PIX" && !pix && (
+              <Button onClick={handleGeneratePix} className="w-full" size="lg" disabled={isSubmitting}>
+                {isSubmitting ? "Gerando..." : `Gerar PIX de ${selectedGift ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(checkoutTotal()) : ""}`}
+              </Button>
+            )}
+            {payMode === "checking" && (
+              <Button className="w-full" size="lg" disabled>
+                Carregando...
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>

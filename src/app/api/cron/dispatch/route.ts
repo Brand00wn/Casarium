@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendBulkInvites, sendPendingReminders } from "@/app/actions/messaging";
+import { expireStalePayments } from "@/app/actions/payments";
 import { DEFAULT_MESSAGING } from "@/lib/whatsapp-helpers";
 
 const DAY_MS = 1000 * 60 * 60 * 24;
@@ -40,6 +41,7 @@ export async function GET(req: Request) {
   });
 
   const report: any[] = [];
+  const expired = await expireStalePayments().catch(() => ({ expired: 0 }));
 
   for (const w of weddings) {
     const cfg = w.messagingConfig ?? { ...DEFAULT_MESSAGING, inviteSentAt: null, lastReminderAt: null };
@@ -70,5 +72,5 @@ export async function GET(req: Request) {
     report.push(entry);
   }
 
-  return NextResponse.json({ ok: true, weddings: report.length, report });
+  return NextResponse.json({ ok: true, weddings: report.length, expiredPayments: expired.expired, report });
 }

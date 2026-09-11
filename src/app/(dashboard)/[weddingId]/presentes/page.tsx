@@ -34,6 +34,7 @@ import { Badge } from "@/components/ui/badge";
 import { UploadButton } from "@/lib/uploadthing";
 import { SafeImage } from "@/components/ui/safe-image";
 import { ImageAuditButton } from "./image-audit-button";
+import { PaymentConfigCard } from "@/components/gifts/payment-config-card";
 import { AIGiftAssistant } from "./ai-assistant";
 
 export default function GiftsDashboardPage({ params }: { params: Promise<{ weddingId: string }> }) {
@@ -201,6 +202,7 @@ export default function GiftsDashboardPage({ params }: { params: Promise<{ weddi
   return (
     <div className="flex flex-col lg:flex-row gap-6 p-6 max-w-[1400px] mx-auto min-h-screen items-start">
       <div className="flex-1 space-y-8 min-w-0 pb-10">
+        <PaymentConfigCard weddingSlug={weddingId} />
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold">Gestão de Presentes</h1>
           
