@@ -17,7 +17,7 @@ const STEPS = [
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
 export function QuotaExplainer({ gifts }: { gifts: SimpleGift[] }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const quotable = useMemo(() => gifts.filter(g => g.quotaCount > 1), [gifts]);
   const [giftId, setGiftId] = useState<string>("");
   const gift = quotable.find(g => g.id === giftId) ?? quotable[0];
@@ -33,18 +33,26 @@ export function QuotaExplainer({ gifts }: { gifts: SimpleGift[] }) {
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-between gap-3 p-5 text-left"
+        className="w-full flex items-center justify-between gap-3 p-5 text-left hover:bg-primary/[0.04] transition-colors rounded-2xl"
       >
         <span className="flex items-center gap-3">
-          <span className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">
+          <span className="relative w-11 h-11 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">
             <GiftIcon className="w-5 h-5" />
+            {!open && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60" />
+                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-primary border-2 border-white text-[8px] font-bold text-white items-center justify-center">?</span>
+              </span>
+            )}
           </span>
           <span>
             <span className="block font-display text-2xl leading-tight">Como funcionam as cotas?</span>
-            <span className="block text-sm text-muted-foreground font-light">Entenda em 10 segundos — sem letra miúda</span>
+            <span className="block text-sm text-primary font-semibold mt-0.5">
+              {open ? "Toque para recolher ↑" : "Toque aqui e entenda em 10 segundos ↓"}
+            </span>
           </span>
         </span>
-        <ChevronDown className={cn("w-5 h-5 text-muted-foreground transition-transform", open && "rotate-180")} />
+        <ChevronDown className={cn("w-5 h-5 text-muted-foreground transition-transform shrink-0", open && "rotate-180")} />
       </button>
 
       {open && (
