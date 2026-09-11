@@ -191,6 +191,13 @@ export default function GiftsDashboardPage({ params }: { params: Promise<{ weddi
       return acc;
     }, {});
 
+  const buyersByGiftId = transactions
+    .filter((t) => t.status === "PAID" && t.giftId)
+    .reduce((acc: Record<string, { name: string, quantity: number }[]>, t) => {
+      (acc[t.giftId!] = acc[t.giftId!] || []).push({ name: t.guestName, quantity: t.quantity || 1 });
+      return acc;
+    }, {});
+
   const totalArrecadado = transactions
     .filter((t) => t.status === "PAID")
     .reduce((sum, t) => sum + t.amount, 0);
@@ -492,13 +499,27 @@ export default function GiftsDashboardPage({ params }: { params: Promise<{ weddi
                         {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(gift.price)}
                       </TableCell>
                       <TableCell>
-                        {gift.quotaCount > 1 ? (
-                          <span className="text-xs font-medium whitespace-nowrap">
-                            {Math.min(soldByGiftId[gift.id] || 0, gift.quotaCount)}/{gift.quotaCount} vendidas
-                          </span>
-                        ) : (
-                          gift.quotaCount
-                        )}
+                        {(() => {
+                          const sold = Math.min(soldByGiftId[gift.id] || 0, gift.quotaCount);
+                          const buyers = buyersByGiftId[gift.id] || [];
+                          const title = buyers.map(b => `${b.name}${b.quantity > 1 ? ` (${b.quantity} cotas)` : ""}`).join("\n");
+                          if (gift.quotaCount > 1) {
+                            return (
+                              <span className="text-xs font-medium whitespace-nowrap" title={title || undefined}>
+                                {sold}/{gift.quotaCount} vendidas
+                              </span>
+                            );
+                          }
+                          return sold > 0 ? (
+                            <span title={title || undefined}>
+                              <Badge className="bg-green-600 hover:bg-green-600 text-white whitespace-nowrap">
+                                Comprado ✓
+                              </Badge>
+                            </span>
+                          ) : (
+                            <Badge variant="secondary" className="whitespace-nowrap">Disponível</Badge>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="text-right whitespace-nowrap">
                         <Button variant="ghost" size="icon" onClick={() => handleEdit(gift)}>
