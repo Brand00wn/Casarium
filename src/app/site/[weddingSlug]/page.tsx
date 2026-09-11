@@ -338,7 +338,7 @@ export default async function WeddingSitePage({ params }: { params: Promise<{ we
                   {vendors.map((v) => {
                     const Icon = VENDOR_ICONS[v.type] || Sparkles;
                     return (
-                      <div key={v.id} className="rounded-xl bg-muted/40 border border-border/50 p-5 hover:border-primary/40 hover:shadow-md transition-all">
+                      <div key={v.id} className="rounded-xl bg-muted/40 border border-border/50 p-5 hover:border-primary/40 hover:shadow-md transition-all flex flex-col">
                         <div className="flex items-center gap-2.5">
                           <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                             <Icon className="w-4 h-4 text-primary" />
@@ -354,12 +354,12 @@ export default async function WeddingSitePage({ params }: { params: Promise<{ we
                             <span className="font-medium">{v.recommendedProfessional}</span>
                           </p>
                         )}
+                        {v.notes && <p className="mt-2 text-sm font-light italic border-t border-border/50 pt-2">“{v.notes}”</p>}
                         {v.address && (
-                          <div className="mt-3">
+                          <div className="mt-auto pt-4">
                             <MapsButton address={v.address} />
                           </div>
                         )}
-                        {v.notes && <p className="mt-2 text-sm font-light italic border-t border-border/50 pt-2">“{v.notes}”</p>}
                       </div>
                     );
                   })}
