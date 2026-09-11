@@ -120,19 +120,37 @@ type CheckoutInput = {
   installments?: number;
 };
 
-/** Cria o pagamento real (PIX gera QR; cartão cobra na hora). Rota pública do site. */
+/** Cria o pagamento real (PIX gera QR; cartão cobra na hora). Rota pública do site.
+ *  Nunca lança: devolve { ok:false, error } para toast/Brick tratar em vez de
+ *  estourar como erro de render. */
 export async function createQuotaPayment(weddingSlug: string, input: CheckoutInput) {
-  const wedding = await prisma.wedding.findUnique({ where: { slug: weddingSlug } });
-  if (!wedding) throw new Error("Casamento não encontrado");
-  const { cfg, accessToken } = await getConfigOrThrow(wedding.id);
+  try {
+    return await createQuotaPaymentInner(weddingSlug, input);
+  } catch (e: any) {
+    console.error("[createQuotaPayment]", e?.message || e);
+    return { ok: false as const, error: e?.message || "Erro no pagamento." };
+  }
+}
 
-  if (!input.guestName.trim()) throw new Error("Informe seu nome.");
+async function createQuotaPaymentInner(weddingSlug: string, input: CheckoutInput) {
+  const fail = (error: string) => ({ ok: false as const, error });
+  const wedding = await prisma.wedding.findUnique({ where: { slug: weddingSlug } });
+  if (!wedding) return fail("Casamento não encontrado.");
+  let cfg;
+  let accessToken: string;
+  try {
+    ({ cfg, accessToken } = await getConfigOrThrow(wedding.id));
+  } catch (e: any) {
+    return fail(e?.message || "Pagamento indisponível.");
+  }
+
+  if (!input.guestName.trim()) return fail("Informe seu nome.");
   if (!input.guestEmail.trim() || !/^\S+@\S+\.\S+$/.test(input.guestEmail)) {
-    throw new Error("Informe um e-mail válido para o pagamento.");
+    return fail("Informe um e-mail válido para o pagamento.");
   }
 
   const gift = await prisma.gift.findFirst({ where: { id: input.giftId, weddingId: wedding.id } });
-  if (!gift) throw new Error("Presente não encontrado.");
+  if (!gift) return fail("Presente não encontrado.");
 
   const quantity = Math.max(1, Math.floor(input.quantity || 1));
   const soldAgg = await prisma.transaction.aggregate({
@@ -140,8 +158,8 @@ export async function createQuotaPayment(weddingSlug: string, input: CheckoutInp
     _sum: { quantity: true },
   });
   const remaining = gift.quotaCount - (soldAgg._sum.quantity || 0);
-  if (remaining <= 0) throw new Error("Este presente já foi completamente presenteado! 🎉");
-  if (quantity > remaining) throw new Error(`Restam apenas ${remaining} de ${gift.quotaCount} cotas.`);
+  if (remaining <= 0) return fail("Este presente já foi completamente presenteado! 🎉");
+  if (quantity > remaining) return fail(`Restam apenas ${remaining} de ${gift.quotaCount} cotas.`);
 
   const quotaValue = gift.price / gift.quotaCount;
   const base = Math.round(quantity * quotaValue * 100) / 100;
@@ -150,7 +168,7 @@ export async function createQuotaPayment(weddingSlug: string, input: CheckoutInp
     : { total: base, fee: 0 };
 
   if (input.paymentMethod === "CREDIT_CARD" && !input.cardToken) {
-    throw new Error("Dados do cartão inválidos — tente novamente.");
+    return fail("Dados do cartão inválidos — tente novamente.");
   }
 
   const transaction = await prisma.transaction.create({
@@ -169,16 +187,25 @@ export async function createQuotaPayment(weddingSlug: string, input: CheckoutInp
   });
 
   const siteUrl = await getSiteUrl();
-  const mp = await createMpPayment(accessToken, {
-    transactionAmount: total,
-    description: `${quantity}x ${gift.name} — ${wedding.partner1Name} & ${wedding.partner2Name}`,
-    paymentMethodId: input.paymentMethod === "PIX" ? "pix" : (input.cardPaymentMethodId || "master"),
-    payer: { email: input.guestEmail.trim() },
-    token: input.cardToken,
-    installments: input.installments || 1,
-    externalReference: transaction.id,
-    notificationUrl: `${siteUrl}/api/webhooks/mercadopago`,
-  });
+  let mp;
+  try {
+    mp = await createMpPayment(accessToken, {
+      transactionAmount: total,
+      description: `${quantity}x ${gift.name} — ${wedding.partner1Name} & ${wedding.partner2Name}`,
+      paymentMethodId: input.paymentMethod === "PIX" ? "pix" : (input.cardPaymentMethodId || "master"),
+      payer: { email: input.guestEmail.trim() },
+      token: input.cardToken,
+      installments: input.installments || 1,
+      externalReference: transaction.id,
+      notificationUrl: `${siteUrl}/api/webhooks/mercadopago`,
+    });
+  } catch (e: any) {
+    await prisma.transaction.update({
+      where: { id: transaction.id },
+      data: { status: "FAILED" },
+    });
+    return fail(e?.message || "Operadora recusou o pagamento.");
+  }
 
   await prisma.transaction.update({
     where: { id: transaction.id },
@@ -189,6 +216,7 @@ export async function createQuotaPayment(weddingSlug: string, input: CheckoutInp
 
   if (input.paymentMethod === "PIX") {
     return {
+      ok: true as const,
       status: "pending" as const,
       transactionId: transaction.id,
       amount: total,
@@ -200,9 +228,14 @@ export async function createQuotaPayment(weddingSlug: string, input: CheckoutInp
   }
 
   if (mp.status === "approved") {
-    return { status: "approved" as const, transactionId: transaction.id, amount: total, fee };
+    return { ok: true as const, status: "approved" as const, transactionId: transaction.id, amount: total, fee };
   }
+  await prisma.transaction.update({
+    where: { id: transaction.id },
+    data: { status: "FAILED" },
+  });
   return {
+    ok: true as const,
     status: "rejected" as const,
     transactionId: transaction.id,
     amount: total,

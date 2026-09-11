@@ -175,6 +175,10 @@ export default function GiftGrid({
         paymentMethod: "PIX",
         ...(siteGuest ? { guestId: siteGuest.id } : {}),
       });
+      if (res.ok === false) {
+        toast.error(res.error || "Erro ao gerar PIX.");
+        return;
+      }
       if (res.status === "pending") {
         setPix({
           qrCodeBase64: res.qrCodeBase64,
@@ -250,6 +254,11 @@ export default function GiftGrid({
               ...(siteGuest ? { guestId: siteGuest.id } : {}),
             }).then((res: any) => {
               setIsSubmitting(false);
+              if (res.ok === false) {
+                reject();
+                toast.error(res.error || "Erro no pagamento.");
+                return;
+              }
               if (res.status === "approved") {
                 resolve();
                 onPaidSuccess("Pagamento aprovado! Muito obrigado pelo presente. 🎉");
