@@ -40,10 +40,29 @@ async function mpFetch(accessToken: string, path: string, init?: RequestInit) {
     const causes = Array.isArray(data?.cause)
       ? data.cause.map((c: any) => c?.description || c?.code).filter(Boolean).join(" | ")
       : "";
-    const msg = causes || data?.message || data?.error || `HTTP ${res.status}`;
-    throw new Error(`Mercado Pago: ${msg}`);
+    const raw = causes || data?.message || data?.error || `HTTP ${res.status}`;
+    throw new Error(`Mercado Pago: ${translateMpError(raw)}`);
   }
   return data;
+}
+
+/** Traduz erros crípticos do MP para algo acionável em PT-BR. */
+function translateMpError(raw: string): string {
+  const low = raw.toLowerCase();
+  if (low.includes("excluded by a rule") || low.includes("excludes_by_rule")) {
+    return "Parcelamento não permitido para este cartão/conta. Tente em menos parcelas (ex: 10x ou 12x) ou outro cartão.";
+  }
+  if (low.includes("invalid_installments") || low.includes("invalid number of shares")) {
+    return "Número de parcelas inválido para este cartão. Tente em menos vezes.";
+  }
+  if (low.includes("invalid_users_involved") || low.includes("payer") && low.includes("collector")) {
+    return "Não é possível pagar para a própria conta. Use outro e-mail no checkout.";
+  }
+  if (low.includes("inactive user") || low.includes("unauthorized")) {
+    return "Conta de recebimento ainda não habilitada. Complete o cadastro no Mercado Pago.";
+  }
+  return raw;
+}
 }
 
 export async function createMpPayment(accessToken: string, input: MpPaymentInput): Promise<MpPayment> {
