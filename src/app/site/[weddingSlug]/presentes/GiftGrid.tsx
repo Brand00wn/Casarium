@@ -248,13 +248,24 @@ export default function GiftGrid({
         callbacks: {
           onReady: () => {},
           onSubmit: (cardFormData: any) => new Promise<void>((resolve, reject) => {
-            if (!validGuest()) return reject();
+            // O Brick tem o PRÓPRIO campo de e-mail (ver print) — ele é a fonte
+            // da verdade p/ o MP, não o campo "Seu e-mail" de cima. Usa o do Brick.
+            const brickEmail = String(cardFormData.payer?.email || "").trim() || guestEmail.trim();
+            if (!guestName.trim()) {
+              toast.error("Por favor, informe seu nome.");
+              return reject();
+            }
+            if (!brickEmail || !/^\S+@\S+\.\S+$/.test(brickEmail)) {
+              toast.error("Informe um e-mail válido para o pagamento.");
+              return reject();
+            }
+            if (brickEmail !== guestEmail) setGuestEmail(brickEmail);
             setIsSubmitting(true);
             createQuotaPayment(weddingSlug, {
               giftId: selectedGift!.id,
               quantity: checkoutQty(),
               guestName,
-              guestEmail: guestEmail.trim(),
+              guestEmail: brickEmail,
               guestMessage,
               paymentMethod: "CREDIT_CARD",
               cardToken: cardFormData.token,
@@ -490,7 +501,7 @@ export default function GiftGrid({
                 />
               </div>
 
-              {payMode === "mp" && (
+              {payMode === "mp" && paymentMethod === "PIX" && (
                 <div className="space-y-2">
                   <Label htmlFor="email">Seu e-mail (para o pagamento)</Label>
                   <Input
@@ -501,6 +512,11 @@ export default function GiftGrid({
                     placeholder="voce@email.com"
                   />
                 </div>
+              )}
+              {payMode === "mp" && paymentMethod === "CREDIT_CARD" && (
+                <p className="text-xs text-muted-foreground">
+                  O e-mail é preenchido <strong>dentro do cartão</strong> abaixo (campo “Preencha seus dados”).
+                </p>
               )}
 
               <div className="space-y-2">
