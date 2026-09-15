@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/session";
 import { encryptSecret, decryptSecret } from "@/lib/payment-crypto";
-import { createMpPayment, getMpPayment, applyCardFee } from "@/lib/mercadopago";
+import { createMpPayment, getMpPayment, applyCardFee, diagnoseMpToken, isTestToken } from "@/lib/mercadopago";
 import { getSiteUrl } from "@/lib/site-url";
 
 const QUOTA_HOLD_MINUTES = 40;
@@ -99,10 +99,26 @@ export async function savePaymentConfig(weddingSlug: string, data: {
 /** Public Key para o Brick de cartão (público por natureza). */
 export async function getPaymentPublicKey(weddingSlug: string) {
   const wedding = await prisma.wedding.findUnique({ where: { slug: weddingSlug } });
-  if (!wedding) return { publicKey: null };
+  if (!wedding) return { publicKey: null, env: null as "test" | "production" | null };
   const cfg = await prisma.weddingPaymentConfig.findUnique({ where: { weddingId: wedding.id } });
-  if (!cfg?.enabled || !cfg.publicKey) return { publicKey: null };
-  return { publicKey: cfg.publicKey };
+  if (!cfg?.enabled || !cfg.publicKey) return { publicKey: null, env: null as "test" | "production" | null };
+  let env: "test" | "production" | null = null;
+  try {
+    const raw = decryptSecret(cfg.accessTokenEncrypted);
+    env = raw.startsWith("TEST-") ? "test" : "production";
+  } catch { /* mantém null */ }
+  return { publicKey: cfg.publicKey, env };
+}
+
+/** Testa o Access Token salvo sem cobrar nada (chama /users/me no MP). */
+export async function diagnosePaymentConfig(weddingSlug: string) {
+  await requirePermission(weddingSlug, "canEditWedding");
+  const wedding = await prisma.wedding.findUnique({ where: { slug: weddingSlug } });
+  if (!wedding) throw new Error("Casamento não encontrado");
+  const { accessToken } = await getConfigOrThrow(wedding.id);
+  const diag = await diagnoseMpToken(accessToken);
+  if (diag.rawError) throw new Error(diag.rawError);
+  return diag;
 }
 
 /** O casamento aceita pagamento online? (para o site decidir entre MP e simulação) */
@@ -116,11 +132,13 @@ export async function isPaymentConfigured(weddingSlug: string) {
   } catch {
     return { configured: false as const };
   }
+  const raw = decryptSecret(cfg.accessTokenEncrypted);
   return {
     configured: true as const,
     hasCard: !!cfg.publicKey,
     passCardFeeToGuest: cfg.passCardFeeToGuest,
     cardFeePercent: cfg.cardFeePercent,
+    env: (isTestToken(raw) ? "test" : "production") as "test" | "production",
   };
 }
 
@@ -165,6 +183,11 @@ async function createQuotaPaymentInner(weddingSlug: string, input: CheckoutInput
   if (!input.guestName.trim()) return fail("Informe seu nome.");
   if (!input.guestEmail.trim() || !/^\S+@\S+\.\S+$/.test(input.guestEmail)) {
     return fail("Informe um e-mail válido para o pagamento.");
+  }
+  // Modo TEST do MP só aprova com o comprador de teste oficial — senão
+  // devolve "excluded by a rule", que confundimos com parcelamento.
+  if (isTestToken(accessToken) && input.guestEmail.trim().toLowerCase() !== "test@testuser.com") {
+    return fail("Em modo TESTE o Mercado Pago só aceita o e-mail test@testuser.com no checkout (nome APRO, CPF 12345678909, cartão 4235 6477 2802 5682). Troque o e-mail ou use credencial APP_USR- de produção.");
   }
 
   const gift = await prisma.gift.findFirst({ where: { id: input.giftId, weddingId: wedding.id } });

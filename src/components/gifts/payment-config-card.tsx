@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { CreditCard, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { getPaymentConfigStatus, savePaymentConfig } from "@/app/actions/payments";
+import { getPaymentConfigStatus, savePaymentConfig, diagnosePaymentConfig } from "@/app/actions/payments";
 
 /** Configuração do Mercado Pago do casamento (noivos/cerimonialista com permissão). */
 export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
@@ -20,6 +20,7 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
   const [feePercent, setFeePercent] = useState("4.98");
   const [enabled, setEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
 
   const typedKeyEnv = publicKey.trim().startsWith("TEST-")
     ? "test"
@@ -144,6 +145,26 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
           {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
           Salvar configuração
         </Button>
+        {status?.configured && (
+          <Button
+            variant="outline"
+            disabled={testing}
+            onClick={async () => {
+              setTesting(true);
+              try {
+                const d = await diagnosePaymentConfig(weddingSlug);
+                toast.success(`Token OK (${d.env}) — conta ${d.nickname || d.userId} • métodos: ${(d.methods || []).slice(0, 5).join(", ") || "?"}`);
+              } catch (e: any) {
+                toast.error(e.message || "Token inválido.");
+              } finally {
+                setTesting(false);
+              }
+            }}
+          >
+            {testing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+            Testar conexão
+          </Button>
+        )}
       </CardContent>
     </Card>
   );

@@ -13,6 +13,15 @@ export type MpPaymentInput = {
   notificationUrl?: string;
 };
 
+export function isTestToken(accessToken: string): boolean {
+  return accessToken.trim().startsWith("TEST-");
+}
+
+function isLocalUrl(url?: string): boolean {
+  if (!url) return true;
+  return /localhost|127\.0\.0\.1|0\.0\.0\.0/.test(url);
+}
+
 export type MpPayment = {
   id: number;
   status: string; // pending | approved | rejected | cancelled | in_process ...
@@ -24,24 +33,28 @@ export type MpPayment = {
   };
 };
 
-async function mpFetch(accessToken: string, path: string, init?: RequestInit) {
-  const res = await fetch(`${MP_API}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
-      "X-Idempotency-Key": crypto.randomUUID(),
-      ...(init?.headers || {}),
-    },
-  });
+async function mpFetch(accessToken: string, path: string, init?: RequestInit, opts?: { idempotent?: boolean }) {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${accessToken}`,
+    ...((init?.headers as Record<string, string>) || {}),
+  };
+  // GETs não precisam de idempotency; POSTs sim.
+  if (opts?.idempotent !== false && (!init?.method || init.method === "POST")) {
+    headers["X-Idempotency-Key"] = crypto.randomUUID();
+  }
+  const res = await fetch(`${MP_API}${path}`, { ...init, headers });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    console.error("[MP API] Erro", res.status, path, JSON.stringify(data).slice(0, 1000));
+    // Log completo no servidor (aparece no Railway/Vercel) — essencial p/ diagnóstico.
+    console.error("[MP API] Erro", res.status, path, JSON.stringify(data).slice(0, 2000));
     const causes = Array.isArray(data?.cause)
-      ? data.cause.map((c: any) => c?.description || c?.code).filter(Boolean).join(" | ")
+      ? data.cause.map((c: any) => [c?.code, c?.description].filter(Boolean).join(": ")).filter(Boolean).join(" | ")
       : "";
     const raw = causes || data?.message || data?.error || `HTTP ${res.status}`;
-    throw new Error(`Mercado Pago: ${translateMpError(raw)}`);
+    const friendly = translateMpError(raw);
+    // Mostra o motivo amigável + detalhe técnico curto (não vaza o token).
+    throw new Error(raw === friendly ? `Mercado Pago: ${raw}` : `Mercado Pago: ${friendly} (detalhe: ${raw.slice(0, 220)})`);
   }
   return data;
 }
@@ -49,8 +62,11 @@ async function mpFetch(accessToken: string, path: string, init?: RequestInit) {
 /** Traduz erros crípticos do MP para algo acionável em PT-BR. */
 function translateMpError(raw: string): string {
   const low = raw.toLowerCase();
-  if (low.includes("excluded by a rule") || low.includes("excludes_by_rule")) {
-    return "Parcelamento não permitido para este cartão/conta. Tente em menos parcelas (ex: 10x ou 12x) ou outro cartão.";
+  // "payment_method ... is excluded by a rule" acontece TAMBÉM à vista (1x):
+  // cartão/bandeira não habilitada p/ a conta, BIN de teste errado, valor fora
+  // da regra, ou credencial de teste usada com dados reais (e vice-versa).
+  if (low.includes("excluded by a rule") || low.includes("excludes_by_rule") || low.includes("not_supported")) {
+    return "Pagamento recusado pela regra da conta/cartão (vale p/ 1x também). Em TESTE use e-mail test@testuser.com + nome APRO + CPF 12345678909 + cartão 4235 6477 2802 5682 ou 5480 8328 0103 3311; em PRODUÇÃO use cartão real, à vista (1x), Public Key e Token do MESMO app.";
   }
   if (low.includes("invalid_installments") || low.includes("invalid number of shares")) {
     return "Número de parcelas inválido para este cartão. Tente em menos vezes.";
@@ -65,6 +81,11 @@ function translateMpError(raw: string): string {
 }
 
 export async function createMpPayment(accessToken: string, input: MpPaymentInput): Promise<MpPayment> {
+  const installments = Math.max(1, Math.floor(input.installments ?? 1));
+  // notification_url localhost é rejeitada/ignorada pelo MP — omita em dev.
+  const notificationUrl = input.notificationUrl && !isLocalUrl(input.notificationUrl)
+    ? input.notificationUrl
+    : undefined;
   return mpFetch(accessToken, "/v1/payments", {
     method: "POST",
     body: JSON.stringify({
@@ -72,7 +93,7 @@ export async function createMpPayment(accessToken: string, input: MpPaymentInput
       description: input.description.slice(0, 120),
       payment_method_id: input.paymentMethodId,
       token: input.token,
-      installments: input.installments ?? 1,
+      installments,
       payer: {
         email: input.payer.email,
         first_name: input.payer.firstName,
@@ -82,13 +103,40 @@ export async function createMpPayment(accessToken: string, input: MpPaymentInput
           : {}),
       },
       external_reference: input.externalReference,
-      notification_url: input.notificationUrl,
+      ...(notificationUrl ? { notification_url: notificationUrl } : {}),
     }),
   });
 }
 
 export async function getMpPayment(accessToken: string, paymentId: string | number): Promise<MpPayment> {
-  return mpFetch(accessToken, `/v1/payments/${paymentId}`);
+  return mpFetch(accessToken, `/v1/payments/${paymentId}`, undefined, { idempotent: false });
+}
+
+/** Valida o token sem cobrar nada: quem é o dono + métodos ativos. */
+export async function diagnoseMpToken(accessToken: string): Promise<{
+  env: "test" | "production";
+  userId?: number | string;
+  nickname?: string;
+  site?: string;
+  methods?: string[];
+  rawError?: string;
+}> {
+  const env = isTestToken(accessToken) ? "test" as const : "production" as const;
+  try {
+    const me = await mpFetch(accessToken, "/users/me", undefined, { idempotent: false });
+    const methods = await mpFetch(accessToken, "/v1/payment_methods", undefined, { idempotent: false })
+      .then((list: any[]) => (Array.isArray(list) ? list.map((m) => m?.id).filter(Boolean).slice(0, 30) : []))
+      .catch(() => undefined);
+    return { env, userId: me?.id, nickname: me?.nickname, site: me?.site_id, methods };
+  } catch (e: any) {
+    return { env, rawError: e?.message || "Token inválido ou sem permissão." };
+  }
+}
+
+/** Parcela mínima ~R$5: evita oferecer 12x num valor que o MP recusa por regra. */
+export function maxInstallmentsForAmount(total: number): number {
+  if (!total || total <= 0) return 1;
+  return Math.min(12, Math.max(1, Math.floor(total / 5)));
 }
 
 /** Taxa do cartão repassada? amount = base * (1 + fee%). */

@@ -62,6 +62,7 @@ export default function GiftGrid({
   const [mpCard, setMpCard] = useState(false);
   const [cardFee, setCardFee] = useState({ pass: false, percent: 4.98 });
   const [publicKey, setPublicKey] = useState<string | null>(null);
+  const [mpEnv, setMpEnv] = useState<"test" | "production" | null>(null);
   const [pix, setPix] = useState<{ qrCodeBase64: string | null, copyPaste: string | null, transactionId: string, amount: number } | null>(null);
   const brickController = useRef<any>(null);
 
@@ -86,9 +87,11 @@ export default function GiftGrid({
         setPayMode("mp");
         setMpCard(cfg.hasCard);
         setCardFee({ pass: cfg.passCardFeeToGuest, percent: cfg.cardFeePercent });
+        setMpEnv((cfg as any).env ?? null);
         if (cfg.hasCard) {
-          const { publicKey: pk } = await getPaymentPublicKey(weddingSlug);
+          const { publicKey: pk, env } = await getPaymentPublicKey(weddingSlug);
           setPublicKey(pk);
+          if (env) setMpEnv(env);
         }
       } else {
         setPayMode("simulated");
@@ -234,8 +237,14 @@ export default function GiftGrid({
       try { brickController.current?.unmount(); } catch { /* noop */ }
       const mp = new w.MercadoPago(publicKey, { locale: "pt-BR" });
       const bricks = mp.bricks();
+      // Parcela mínima ~R$5: evita o Brick oferecer 12x num valor baixo que o
+      // MP recusa com "excluded by a rule".
+      const maxInstallments = Math.min(12, Math.max(1, Math.floor(checkoutTotal() / 5)));
       bricks.create("cardPayment", "mp-card-brick", {
         initialization: { amount: checkoutTotal() },
+        customization: {
+          paymentMethods: { minInstallments: 1, maxInstallments },
+        },
         callbacks: {
           onReady: () => {},
           onSubmit: (cardFormData: any) => new Promise<void>((resolve, reject) => {
@@ -605,6 +614,12 @@ export default function GiftGrid({
 
               {payMode === "mp" && paymentMethod === "CREDIT_CARD" && mpCard && (
                 <div className="space-y-2">
+                  {mpEnv === "test" && (
+                    <div className="p-3 rounded-lg border border-amber-300 bg-amber-50 text-xs text-amber-900 space-y-1">
+                      <p className="font-bold">🧪 Modo TESTE ativo</p>
+                      <p>Use e-mail <code className="font-mono">test@testuser.com</code>, nome <code className="font-mono">APRO</code>, CPF <code className="font-mono">12345678909</code>, cartão <code className="font-mono">4235 6477 2802 5682</code> (Visa) ou <code className="font-mono">5480 8328 0103 3311</code> (Master), validade 11/30, CVV 123, à vista (1x).</p>
+                    </div>
+                  )}
                   {cardFee.pass && cardFee.percent > 0 && selectedGift && (
                     <p className="text-xs text-muted-foreground text-center">
                       Total com taxa do cartão ({cardFee.percent}%):{" "}
