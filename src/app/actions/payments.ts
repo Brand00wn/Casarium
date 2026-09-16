@@ -42,6 +42,7 @@ export async function getPaymentConfigStatus(weddingSlug: string) {
     masked,
     env,
     publicKeySet: !!cfg.publicKey,
+    publicKeyHint: cfg.publicKey ? `${cfg.publicKey.slice(0, 9)}…${cfg.publicKey.slice(-4)}` : null,
     passCardFeeToGuest: cfg.passCardFeeToGuest,
     cardFeePercent: cfg.cardFeePercent,
     enabled: cfg.enabled,
@@ -248,6 +249,12 @@ async function createQuotaPaymentInner(weddingSlug: string, input: CheckoutInput
     });
   } catch (e: any) {
     const rawMsg: string = e?.message || "Operadora recusou o pagamento.";
+    // Contexto sem PII p/ correlacionar no log do Railway (valor, bandeira,
+    // parcelas). O detalhe cru do MP já é logado em mercadopago.ts.
+    console.error("[createQuotaPayment] contexto", JSON.stringify({
+      amount: total, method: input.paymentMethod, pmId: input.cardPaymentMethodId || null,
+      inst: input.installments || 1, hasToken: !!input.cardToken,
+    }));
     // 2034 = pagador e recebedor são o mesmo usuário. Busca o e-mail do
     // dono do token para dar um erro acionável ("você usou X, a conta é Y").
     if (/2034|invalid_users_involved/i.test(rawMsg)) {

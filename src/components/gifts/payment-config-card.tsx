@@ -115,6 +115,9 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
             {!publicKey && !status?.publicKeySet && (
               <p className="text-xs text-muted-foreground">Sem ela, só PIX. Use a Public Key do mesmo ambiente do token.</p>
             )}
+            {status?.publicKeyHint && (
+              <p className="text-xs text-muted-foreground">Chave salva: <code className="font-mono">{status.publicKeyHint}</code> + token {status.masked} — precisam ser da MESMA aplicação (Suas integrações → sua app → Testes → Credenciais de teste).</p>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
