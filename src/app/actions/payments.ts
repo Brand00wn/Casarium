@@ -190,7 +190,10 @@ async function createQuotaPaymentInner(weddingSlug: string, input: CheckoutInput
   // padrão dos usuários de teste criados no painel Developers.
   const guestEmailNorm = input.guestEmail.trim().toLowerCase();
   if (isTestToken(accessToken) && !guestEmailNorm.endsWith("@testuser.com")) {
-    return fail("Em modo TESTE o Mercado Pago só aceita e-mail de comprador de teste (@testuser.com, ex: test@testuser.com) no checkout — nunca use seu e-mail real, dá erro 2034. Use nome APRO, CPF 12345678909, cartão 4235 6477 2802 5682. Ou troque por credencial APP_USR- de produção.");
+    const typoHint = /test[e]?user|test-user/i.test(guestEmailNorm) && !guestEmailNorm.endsWith("@testuser.com")
+      ? ` Atenção: você digitou "${input.guestEmail.trim()}" — o domínio certo é @testuser.com (ex: test@testuser.com).`
+      : ` E-mail recebido: "${input.guestEmail.trim()}".`;
+    return fail(`Em modo TESTE o Mercado Pago só aceita e-mail de comprador de teste (@testuser.com, ex: test@testuser.com) no checkout — nunca use seu e-mail real, dá erro 2034. Use nome APRO, CPF 12345678909, cartão 4235 6477 2802 5682. Ou troque por credencial APP_USR- de produção.${typoHint}`);
   }
 
   const gift = await prisma.gift.findFirst({ where: { id: input.giftId, weddingId: wedding.id } });
