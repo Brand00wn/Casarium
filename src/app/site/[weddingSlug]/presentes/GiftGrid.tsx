@@ -65,6 +65,11 @@ export default function GiftGrid({
   const [mpEnv, setMpEnv] = useState<"test" | "production" | null>(null);
   const [pix, setPix] = useState<{ qrCodeBase64: string | null, copyPaste: string | null, transactionId: string, amount: number } | null>(null);
   const brickController = useRef<any>(null);
+  // O Brick é montado uma vez (useEffect sem guestName nas deps p/ não
+  // remontar a cada tecla). Sem ref, o onSubmit enxergaria o nome/e-mail
+  // antigos (stale closure) e barraria com "informe seu nome" mesmo preenchido.
+  const guestRef = useRef({ name: "", email: "", message: "" });
+  guestRef.current = { name: guestName, email: guestEmail, message: guestMessage };
 
   const soldOf = (gift: GiftWithCategories) => Math.min(soldByGift[gift.id] || 0, gift.quotaCount);
   const remainingOf = (gift: GiftWithCategories) => Math.max(gift.quotaCount - soldOf(gift), 0);
@@ -250,8 +255,11 @@ export default function GiftGrid({
           onSubmit: (cardFormData: any) => new Promise<void>((resolve, reject) => {
             // O Brick tem o PRÓPRIO campo de e-mail (ver print) — ele é a fonte
             // da verdade p/ o MP, não o campo "Seu e-mail" de cima. Usa o do Brick.
-            const brickEmail = String(cardFormData.payer?.email || "").trim() || guestEmail.trim();
-            if (!guestName.trim()) {
+            // Lê nome/e-mail/mensagem via ref (valor atual), não do closure da
+            // montagem — senão o nome digitado depois é ignorado.
+            const current = guestRef.current;
+            const brickEmail = String(cardFormData.payer?.email || "").trim() || current.email.trim();
+            if (!current.name.trim()) {
               toast.error("Por favor, informe seu nome.");
               return reject();
             }
@@ -259,14 +267,14 @@ export default function GiftGrid({
               toast.error("Informe um e-mail válido para o pagamento.");
               return reject();
             }
-            if (brickEmail !== guestEmail) setGuestEmail(brickEmail);
+            if (brickEmail !== current.email) setGuestEmail(brickEmail);
             setIsSubmitting(true);
             createQuotaPayment(weddingSlug, {
               giftId: selectedGift!.id,
               quantity: checkoutQty(),
-              guestName,
+              guestName: current.name,
               guestEmail: brickEmail,
-              guestMessage,
+              guestMessage: current.message,
               paymentMethod: "CREDIT_CARD",
               cardToken: cardFormData.token,
               cardPaymentMethodId: cardFormData.payment_method_id,
