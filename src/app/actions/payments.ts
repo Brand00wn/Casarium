@@ -184,10 +184,13 @@ async function createQuotaPaymentInner(weddingSlug: string, input: CheckoutInput
   if (!input.guestEmail.trim() || !/^\S+@\S+\.\S+$/.test(input.guestEmail)) {
     return fail("Informe um e-mail válido para o pagamento.");
   }
-  // Modo TEST do MP só aprova com o comprador de teste oficial — senão
-  // devolve "excluded by a rule", que confundimos com parcelamento.
-  if (isTestToken(accessToken) && input.guestEmail.trim().toLowerCase() !== "test@testuser.com") {
-    return fail("Em modo TESTE o Mercado Pago só aceita o e-mail test@testuser.com no checkout (nome APRO, CPF 12345678909, cartão 4235 6477 2802 5682). Troque o e-mail ou use credencial APP_USR- de produção.");
+  // Modo TEST do MP só aprova com comprador de teste (@testuser.com) — senão
+  // devolve "excluded by a rule" ou 2034 (se igual ao vendedor), que
+  // confundimos com parcelamento. Aceita qualquer @testuser.com, que é o
+  // padrão dos usuários de teste criados no painel Developers.
+  const guestEmailNorm = input.guestEmail.trim().toLowerCase();
+  if (isTestToken(accessToken) && !guestEmailNorm.endsWith("@testuser.com")) {
+    return fail("Em modo TESTE o Mercado Pago só aceita e-mail de comprador de teste (@testuser.com, ex: test@testuser.com) no checkout — nunca use seu e-mail real, dá erro 2034. Use nome APRO, CPF 12345678909, cartão 4235 6477 2802 5682. Ou troque por credencial APP_USR- de produção.");
   }
 
   const gift = await prisma.gift.findFirst({ where: { id: input.giftId, weddingId: wedding.id } });
@@ -241,11 +244,28 @@ async function createQuotaPaymentInner(weddingSlug: string, input: CheckoutInput
       notificationUrl: `${siteUrl}/api/webhooks/mercadopago`,
     });
   } catch (e: any) {
+    const rawMsg: string = e?.message || "Operadora recusou o pagamento.";
+    // 2034 = pagador e recebedor são o mesmo usuário. Busca o e-mail do
+    // dono do token para dar um erro acionável ("você usou X, a conta é Y").
+    if (/2034|invalid_users_involved/i.test(rawMsg)) {
+      try {
+        const diag = await diagnoseMpToken(accessToken);
+        if (diag.email) {
+          await prisma.transaction.update({
+            where: { id: transaction.id },
+            data: { status: "FAILED" },
+          });
+          return fail(
+            `O e-mail ${input.guestEmail.trim()} é o mesmo da conta que recebe (${diag.email}). O Mercado Pago bloqueia pagar para si mesmo (erro 2034). Teste com um e-mail DIFERENTE — em produção use outro e-mail/cartão, em TESTE use test@testuser.com com conta vendedora de teste separada.`
+          );
+        }
+      } catch { /* cai no fail genérico abaixo */ }
+    }
     await prisma.transaction.update({
       where: { id: transaction.id },
       data: { status: "FAILED" },
     });
-    return fail(e?.message || "Operadora recusou o pagamento.");
+    return fail(rawMsg);
   }
 
   await prisma.transaction.update({

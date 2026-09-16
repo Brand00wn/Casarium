@@ -153,7 +153,7 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
               setTesting(true);
               try {
                 const d = await diagnosePaymentConfig(weddingSlug);
-                toast.success(`Token OK (${d.env}) — conta ${d.nickname || d.userId} • métodos: ${(d.methods || []).slice(0, 5).join(", ") || "?"}`);
+                toast.success(`Token OK (${d.env}) — conta ${(d as any).email || d.nickname || d.userId} • métodos: ${(d.methods || []).slice(0, 5).join(", ") || "?"}`);
               } catch (e: any) {
                 toast.error(e.message || "Token inválido.");
               } finally {

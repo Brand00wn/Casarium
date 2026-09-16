@@ -71,8 +71,8 @@ function translateMpError(raw: string): string {
   if (low.includes("invalid_installments") || low.includes("invalid number of shares")) {
     return "Número de parcelas inválido para este cartão. Tente em menos vezes.";
   }
-  if (low.includes("invalid_users_involved") || low.includes("payer") && low.includes("collector")) {
-    return "Não é possível pagar para a própria conta. Use outro e-mail no checkout.";
+  if (low.includes("invalid_users_involved") || low.includes("2034") || (low.includes("payer") && low.includes("collector"))) {
+    return "O e-mail do comprador é o mesmo da conta que recebe (erro 2034). O Mercado Pago bloqueia pagar para si mesmo: teste com um e-mail DIFERENTE do e-mail da conta dos noivos. Em produção, nunca use o e-mail do vendedor no checkout.";
   }
   if (low.includes("inactive user") || low.includes("unauthorized")) {
     return "Conta de recebimento ainda não habilitada. Complete o cadastro no Mercado Pago.";
@@ -117,6 +117,7 @@ export async function diagnoseMpToken(accessToken: string): Promise<{
   env: "test" | "production";
   userId?: number | string;
   nickname?: string;
+  email?: string;
   site?: string;
   methods?: string[];
   rawError?: string;
@@ -127,7 +128,7 @@ export async function diagnoseMpToken(accessToken: string): Promise<{
     const methods = await mpFetch(accessToken, "/v1/payment_methods", undefined, { idempotent: false })
       .then((list: any[]) => (Array.isArray(list) ? list.map((m) => m?.id).filter(Boolean).slice(0, 30) : []))
       .catch(() => undefined);
-    return { env, userId: me?.id, nickname: me?.nickname, site: me?.site_id, methods };
+    return { env, userId: me?.id, nickname: me?.nickname, email: me?.email, site: me?.site_id, methods };
   } catch (e: any) {
     return { env, rawError: e?.message || "Token inválido ou sem permissão." };
   }
