@@ -7,10 +7,12 @@ export type MpPaymentInput = {
   description: string;
   paymentMethodId: string; // "pix" | "master" | "visa" | ...
   payer: { email: string; firstName?: string; lastName?: string; identification?: { type: string, number: string } };
-  token?: string; // card_token do Brick (cartão)
+  token?: string; // card_token do Brick (cartão — nunca enviar no PIX)
   installments?: number;
   externalReference: string; // nosso transactionId
   notificationUrl?: string;
+  /** Expiração do PIX (ISO 8601). Se omitido no PIX, o MP usa 24h. */
+  dateOfExpiration?: string;
   /** Só p/ diagnóstico — nunca é enviado ao MP. */
   debugContext?: Record<string, unknown>;
 };
@@ -91,6 +93,15 @@ async function mpFetch(accessToken: string, path: string, init?: RequestInit, op
 /** Traduz erros crípticos do MP para algo acionável em PT-BR. */
 function translateMpError(raw: string): string {
   const low = raw.toLowerCase();
+  // 13253 = identidade financeira: no PIX significa (a) pagador sem
+  // CPF/nome válidos no payload, ou (b) recebedor sem chave Pix cadastrada
+  // ("Collector user without key enabled for QR render").
+  if (low.includes("13253") || low.includes("financial identity") || low.includes("without key enabled for qr")) {
+    if (low.includes("collector") || low.includes("without key")) {
+      return "A conta dos noivos no Mercado Pago ainda não tem chave Pix cadastrada (erro 13253). Peça aos noivos para cadastrar uma chave em Mercado Pago → Seu dinheiro → Pix → Cadastrar chave e tentar de novo.";
+    }
+    return "PIX recusado na validação de identidade (erro 13253). Confira o CPF do comprador (válido, só números) + nome e sobrenome, e peça aos noivos para confirmar que a conta deles tem chave Pix cadastrada (Mercado Pago → Seu dinheiro → Pix).";
+  }
   // "payment_method ... is excluded by a rule" acontece TAMBÉM à vista (1x):
   // cartão/bandeira não habilitada p/ a conta, BIN de teste errado, valor fora
   // da regra, ou credencial de teste usada com dados reais (e vice-versa).
@@ -113,11 +124,39 @@ function translateMpError(raw: string): string {
 }
 
 export async function createMpPayment(accessToken: string, input: MpPaymentInput): Promise<MpPayment> {
-  const installments = Math.max(1, Math.floor(input.installments ?? 1));
   // notification_url localhost é rejeitada/ignorada pelo MP — omita em dev.
   const notificationUrl = input.notificationUrl && !isLocalUrl(input.notificationUrl)
     ? input.notificationUrl
     : undefined;
+  const cleanCpf = input.payer.identification?.number?.replace(/\D/g, "") || "";
+  const payerBase = {
+    email: input.payer.email,
+    ...(input.payer.firstName ? { first_name: input.payer.firstName } : {}),
+    ...(input.payer.lastName ? { last_name: input.payer.lastName } : {}),
+    ...(cleanCpf
+      ? { identification: { type: input.payer.identification!.type || "CPF", number: cleanCpf } }
+      : {}),
+  };
+
+  // PIX não usa token de cartão nem parcelas — enviar esses campos causa
+  // recusa. Doc: transaction_amount + description + payment_method_id=pix +
+  // payer(email, first_name, last_name, identification CPF).
+  if (input.paymentMethodId === "pix") {
+    return mpFetch(accessToken, "/v1/payments", {
+      method: "POST",
+      body: JSON.stringify({
+        transaction_amount: Math.round(input.transactionAmount * 100) / 100,
+        description: input.description.slice(0, 120),
+        payment_method_id: "pix",
+        payer: payerBase,
+        external_reference: input.externalReference,
+        ...(input.dateOfExpiration ? { date_of_expiration: input.dateOfExpiration } : {}),
+        ...(notificationUrl ? { notification_url: notificationUrl } : {}),
+      }),
+    }, { context: input.debugContext });
+  }
+
+  const installments = Math.max(1, Math.floor(input.installments ?? 1));
   return mpFetch(accessToken, "/v1/payments", {
     method: "POST",
     body: JSON.stringify({
@@ -126,14 +165,7 @@ export async function createMpPayment(accessToken: string, input: MpPaymentInput
       payment_method_id: input.paymentMethodId,
       token: input.token,
       installments,
-      payer: {
-        email: input.payer.email,
-        first_name: input.payer.firstName,
-        last_name: input.payer.lastName,
-        ...(input.payer.identification?.number
-          ? { identification: { type: input.payer.identification.type || "CPF", number: input.payer.identification.number.replace(/\D/g, "") } }
-          : {}),
-      },
+      payer: payerBase,
       external_reference: input.externalReference,
       ...(notificationUrl ? { notification_url: notificationUrl } : {}),
     }),

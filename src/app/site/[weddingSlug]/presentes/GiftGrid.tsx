@@ -29,6 +29,31 @@ import { Progress } from "@/components/ui/progress";
 
 type GiftWithCategories = Gift & { categories?: GiftCategory[] };
 
+/** CPF com máscara 000.000.000-00 enquanto digita. */
+function maskCpf(v: string): string {
+  const d = v.replace(/\D/g, "").slice(0, 11);
+  return d
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+}
+
+/** Validação real de CPF (dígitos verificadores) — o MP recusa CPF inválido com 13253. */
+function isValidCpf(raw: string): boolean {
+  const d = (raw || "").replace(/\D/g, "");
+  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += Number(d[i]) * (10 - i);
+  let r = (sum * 10) % 11;
+  if (r === 10) r = 0;
+  if (r !== Number(d[9])) return false;
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += Number(d[i]) * (11 - i);
+  r = (sum * 10) % 11;
+  if (r === 10) r = 0;
+  return r === Number(d[10]);
+}
+
 export default function GiftGrid({
   gifts,
   categories,
@@ -51,6 +76,7 @@ export default function GiftGrid({
 
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
+  const [guestCpf, setGuestCpf] = useState("");
   const [guestMessage, setGuestMessage] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"PIX" | "CREDIT_CARD">("PIX");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -80,6 +106,7 @@ export default function GiftGrid({
     setSelectedGift(gift);
     setGuestName(siteGuest?.name || "");
     setGuestEmail("");
+    setGuestCpf("");
     setGuestMessage("");
     setPaymentMethod("PIX");
     setQuotas(1);
@@ -158,20 +185,28 @@ export default function GiftGrid({
   const cardFeeValue = () => (cardFee.pass ? Math.round(checkoutBase() * (cardFee.percent / 100) * 100) / 100 : 0);
   const checkoutTotal = () => Math.round((checkoutBase() + (paymentMethod === "CREDIT_CARD" ? cardFeeValue() : 0)) * 100) / 100;
 
-  const validGuest = () => {
+  const validGuest = (requireCpf = false) => {
     if (!guestName.trim()) {
       toast.error("Por favor, informe seu nome.");
+      return false;
+    }
+    if (requireCpf && guestName.trim().split(/\s+/).length < 2) {
+      toast.error("Informe seu nome completo (nome e sobrenome) para gerar o PIX.");
       return false;
     }
     if (!guestEmail.trim() || !/^\S+@\S+\.\S+$/.test(guestEmail)) {
       toast.error("Informe um e-mail válido para o pagamento.");
       return false;
     }
+    if (requireCpf && !isValidCpf(guestCpf)) {
+      toast.error("Informe um CPF válido para gerar o PIX.");
+      return false;
+    }
     return true;
   };
 
   const handleGeneratePix = async () => {
-    if (!selectedGift || !validGuest()) return;
+    if (!selectedGift || !validGuest(true)) return;
     setIsSubmitting(true);
     try {
       const res = await createQuotaPayment(weddingSlug, {
@@ -181,6 +216,7 @@ export default function GiftGrid({
         guestEmail: guestEmail.trim(),
         guestMessage,
         paymentMethod: "PIX",
+        pixIdentification: { type: "CPF", number: guestCpf.replace(/\D/g, "") },
         ...(siteGuest ? { guestId: siteGuest.id } : {}),
       });
       if (res.ok === false) {
@@ -510,16 +546,31 @@ export default function GiftGrid({
               </div>
 
               {payMode === "mp" && paymentMethod === "PIX" && (
-                <div className="space-y-2">
-                  <Label htmlFor="email">Seu e-mail (para o pagamento)</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={guestEmail}
-                    onChange={(e) => setGuestEmail(e.target.value)}
-                    placeholder="voce@email.com"
-                  />
-                </div>
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Seu e-mail (para o pagamento)</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={guestEmail}
+                      onChange={(e) => setGuestEmail(e.target.value)}
+                      placeholder="voce@email.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cpf">Seu CPF (exigido pelo Mercado Pago no PIX)</Label>
+                    <Input
+                      id="cpf"
+                      inputMode="numeric"
+                      value={guestCpf}
+                      onChange={(e) => setGuestCpf(maskCpf(e.target.value))}
+                      placeholder="000.000.000-00"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Usado só para identificar o pagamento — sem ele o PIX é recusado (erro 13253).
+                    </p>
+                  </div>
+                </>
               )}
               {payMode === "mp" && paymentMethod === "CREDIT_CARD" && (
                 <p className="text-xs text-muted-foreground">

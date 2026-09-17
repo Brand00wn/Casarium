@@ -74,9 +74,6 @@ export async function getPaymentConfigStatus(weddingSlug: string) {
     passCardFeeToGuest: cfg.passCardFeeToGuest,
     cardFeePercent: cfg.cardFeePercent,
     enabled: cfg.enabled,
-    directPixKey: cfg.directPixKey || null,
-    directPixKeyType: cfg.directPixKeyType || "CPF",
-    directPixHolderName: cfg.directPixHolderName || null,
     updatedAt: cfg.updatedAt,
   };
 }
@@ -91,39 +88,6 @@ export async function disconnectMp(weddingSlug: string) {
     data: {
       accessTokenEncrypted: null,
       publicKey: null,
-    },
-  });
-  revalidatePath(`/${weddingSlug}/presentes`);
-  return { ok: true };
-}
-
-/** Salva a Chave PIX Direta dos noivos (0% de taxa, pagamento direto sem intermediário). */
-export async function saveDirectPixConfig(weddingSlug: string, data: {
-  key: string;
-  type: string;
-  holderName?: string;
-}) {
-  await requirePermission(weddingSlug, "canEditWedding");
-  const wedding = await prisma.wedding.findUnique({ where: { slug: weddingSlug } });
-  if (!wedding) throw new Error("Casamento não encontrado");
-
-  const existing = await prisma.weddingPaymentConfig.findUnique({ where: { weddingId: wedding.id } });
-
-  await prisma.weddingPaymentConfig.upsert({
-    where: { weddingId: wedding.id },
-    create: {
-      weddingId: wedding.id,
-      accessTokenEncrypted: existing?.accessTokenEncrypted || null,
-      publicKey: existing?.publicKey || null,
-      directPixKey: data.key.trim() || null,
-      directPixKeyType: data.type || "CPF",
-      directPixHolderName: data.holderName?.trim() || null,
-      enabled: true,
-    },
-    update: {
-      directPixKey: data.key.trim() || null,
-      directPixKeyType: data.type || "CPF",
-      directPixHolderName: data.holderName?.trim() || null,
     },
   });
   revalidatePath(`/${weddingSlug}/presentes`);
@@ -237,19 +201,12 @@ export async function isPaymentConfigured(weddingSlug: string) {
     }
   }
 
-  const directPixOk = !!cfg.directPixKey;
-  if (!mpOk && !directPixOk) return { configured: false as const };
+  if (!mpOk) return { configured: false as const };
 
   return {
     configured: true as const,
     hasMp: mpOk,
     hasCard: mpOk && !!cfg.publicKey,
-    hasDirectPix: directPixOk,
-    directPix: directPixOk ? {
-      key: cfg.directPixKey!,
-      type: cfg.directPixKeyType || "CPF",
-      holderName: cfg.directPixHolderName || null,
-    } : null,
     passCardFeeToGuest: cfg.passCardFeeToGuest,
     cardFeePercent: cfg.cardFeePercent,
     env,
@@ -267,8 +224,32 @@ type CheckoutInput = {
   cardToken?: string;
   cardPaymentMethodId?: string;
   cardIdentification?: { type: string, number: string };
+  /** CPF do comprador — obrigatório no PIX (o MP devolve 13253 sem ele). */
+  pixIdentification?: { type: string, number: string };
   installments?: number;
 };
+
+/** Valida CPF (11 dígitos + dígitos verificadores). CNPJ não é aceito no PIX via MP aqui. */
+function isValidCpf(raw: string): boolean {
+  const d = (raw || "").replace(/\D/g, "");
+  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += Number(d[i]) * (10 - i);
+  let r = (sum * 10) % 11;
+  if (r === 10) r = 0;
+  if (r !== Number(d[9])) return false;
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += Number(d[i]) * (11 - i);
+  r = (sum * 10) % 11;
+  if (r === 10) r = 0;
+  return r === Number(d[10]);
+}
+
+/** "Maria da Silva" → { firstName: "Maria", lastName: "da Silva" } (MP exige os dois no PIX). */
+function splitName(full: string): { firstName: string, lastName: string } {
+  const parts = full.trim().split(/\s+/).filter(Boolean);
+  return { firstName: parts[0] || full.trim(), lastName: parts.length > 1 ? parts.slice(1).join(" ") : parts[0] || full.trim() };
+}
 
 /** Cria o pagamento real (PIX gera QR; cartão cobra na hora). Rota pública do site.
  *  Nunca lança: devolve { ok:false, error } para toast/Brick tratar em vez de
@@ -322,6 +303,24 @@ async function createQuotaPaymentInner(weddingSlug: string, input: CheckoutInput
     return fail("Dados do cartão inválidos — tente novamente.");
   }
 
+  // PIX via MP exige CPF válido + nome/sobrenome — sem isso o MP devolve
+  // HTTP 400 13253 "Error in Financial Identity Use Case".
+  let pixFirstName: string | undefined;
+  let pixLastName: string | undefined;
+  let pixCpf: string | undefined;
+  if (input.paymentMethod === "PIX") {
+    pixCpf = (input.pixIdentification?.number || "").replace(/\D/g, "");
+    if (!pixCpf || !isValidCpf(pixCpf)) {
+      return fail("Informe um CPF válido para gerar o PIX.");
+    }
+    if (input.guestName.trim().split(/\s+/).length < 2) {
+      return fail("Informe seu nome completo (nome e sobrenome) para gerar o PIX.");
+    }
+    const split = splitName(input.guestName);
+    pixFirstName = split.firstName;
+    pixLastName = split.lastName;
+  }
+
   const transaction = await prisma.transaction.create({
     data: {
       amount: total,
@@ -340,23 +339,27 @@ async function createQuotaPaymentInner(weddingSlug: string, input: CheckoutInput
   const siteUrl = await getSiteUrl();
   let mp;
   try {
+    const isPix = input.paymentMethod === "PIX";
     mp = await createMpPayment(accessToken, {
       transactionAmount: total,
       description: `${quantity}x ${gift.name} — ${wedding.partner1Name} & ${wedding.partner2Name}`,
-      paymentMethodId: input.paymentMethod === "PIX" ? "pix" : (input.cardPaymentMethodId || "master"),
-      payer: { email: input.guestEmail.trim(), identification: input.cardIdentification },
-      token: input.cardToken,
-      installments: input.installments || 1,
+      paymentMethodId: isPix ? "pix" : (input.cardPaymentMethodId || "master"),
+      payer: isPix
+        ? { email: input.guestEmail.trim(), firstName: pixFirstName, lastName: pixLastName, identification: { type: "CPF", number: pixCpf! } }
+        : { email: input.guestEmail.trim(), identification: input.cardIdentification },
+      ...(isPix ? {} : { token: input.cardToken, installments: input.installments || 1 }),
       externalReference: transaction.id,
+      // Alinha a expiração do QR com a reserva da cota (mín. MP: 30min).
+      ...(isPix ? { dateOfExpiration: (transaction.expiresAt ?? new Date(Date.now() + QUOTA_HOLD_MINUTES * 60_000)).toISOString() } : {}),
       notificationUrl: `${siteUrl}/api/webhooks/mercadopago`,
       debugContext: {
         wedding: weddingSlug,
         amount: total,
         payMethod: input.paymentMethod,
-        mpMethodId: input.paymentMethod === "PIX" ? "pix" : (input.cardPaymentMethodId || "master"),
+        mpMethodId: isPix ? "pix" : (input.cardPaymentMethodId || "master"),
         installments: input.installments || 1,
         hasCardToken: !!input.cardToken,
-        hasIdentification: !!input.cardIdentification?.number,
+        hasIdentification: isPix ? !!pixCpf : !!input.cardIdentification?.number,
         payerEmail: input.guestEmail.trim(),
       },
     });

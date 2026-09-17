@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { CreditCard, Loader2, Sparkles, ChevronDown, ChevronUp, CheckCircle2, QrCode, LogOut } from "lucide-react";
+import { CreditCard, Loader2, Sparkles, ChevronDown, ChevronUp, CheckCircle2, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import {
   getPaymentConfigStatus,
@@ -15,7 +15,6 @@ import {
   getRecentMpErrors,
   getMpConnectUrl,
   disconnectMp,
-  saveDirectPixConfig,
 } from "@/app/actions/payments";
 
 export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
@@ -28,12 +27,6 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
   const [passFee, setPassFee] = useState(false);
   const [feePercent, setFeePercent] = useState("4.98");
   const [enabled, setEnabled] = useState(true);
-
-  // Chave PIX Direta (0% taxa)
-  const [pixKey, setPixKey] = useState("");
-  const [pixType, setPixType] = useState("CPF");
-  const [pixHolder, setPixHolder] = useState("");
-  const [savingPix, setSavingPix] = useState(false);
 
   // Chaves Manuais / Desenvolvedor
   const [showDeveloper, setShowDeveloper] = useState(false);
@@ -68,11 +61,6 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
           setPassFee(s.passCardFeeToGuest);
           setFeePercent(String(s.cardFeePercent));
           setEnabled(s.enabled);
-          if (s.directPixKey) {
-            setPixKey(s.directPixKey);
-            setPixType(s.directPixKeyType || "CPF");
-            setPixHolder(s.directPixHolderName || "");
-          }
         }
       })
       .catch(() => setAllowed(false));
@@ -113,27 +101,6 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
       toast.error(e.message || "Erro ao desconectar.");
     } finally {
       setDisconnecting(false);
-    }
-  };
-
-  const handleSaveDirectPix = async () => {
-    if (!pixKey.trim()) {
-      toast.error("Informe a Chave PIX.");
-      return;
-    }
-    setSavingPix(true);
-    try {
-      await saveDirectPixConfig(weddingSlug, {
-        key: pixKey,
-        type: pixType,
-        holderName: pixHolder,
-      });
-      toast.success("Chave PIX Direta salva!");
-      loadStatus();
-    } catch (e: any) {
-      toast.error(e.message || "Erro ao salvar PIX.");
-    } finally {
-      setSavingPix(false);
     }
   };
 
@@ -245,64 +212,7 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
           )}
         </div>
 
-        {/* 2. Chave PIX Direta dos Noivos (0% de taxa) */}
-        <div className="bg-muted/30 p-5 rounded-2xl border border-border/70 space-y-4">
-          <div className="flex items-center gap-2">
-            <QrCode className="w-5 h-5 text-primary" />
-            <h3 className="font-semibold text-sm">Chave PIX Direta dos Noivos (0% de taxa - Sem intermediários)</h3>
-          </div>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Cadastre a chave PIX dos noivos. No checkout, o convidado verá a chave para copiar e colar no app do banco. O dinheiro vai 100% limpo sem nenhuma taxa intermediária.
-          </p>
-
-          <div className="grid gap-3 sm:grid-cols-3 pt-1">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Tipo de Chave</Label>
-              <select
-                value={pixType}
-                onChange={(e) => setPixType(e.target.value)}
-                className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-              >
-                <option value="CPF">CPF / CNPJ</option>
-                <option value="EMAIL">E-mail</option>
-                <option value="PHONE">Telefone</option>
-                <option value="RANDOM">Chave Aleatória</option>
-              </select>
-            </div>
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label className="text-xs">Chave PIX</Label>
-              <Input
-                value={pixKey}
-                onChange={(e) => setPixKey(e.target.value)}
-                placeholder="ex: noivos@email.com ou 123.456.789-00"
-                className="h-9 text-xs"
-              />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Nome do Titular da Conta (como aparece no banco)</Label>
-            <Input
-              value={pixHolder}
-              onChange={(e) => setPixHolder(e.target.value)}
-              placeholder="ex: Maria da Silva & João Souza"
-              className="h-9 text-xs"
-            />
-          </div>
-
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={handleSaveDirectPix}
-            disabled={savingPix}
-            className="rounded-full text-xs"
-          >
-            {savingPix ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : null}
-            Salvar Chave PIX Direta
-          </Button>
-        </div>
-
-        {/* 3. Ferramentas do Desenvolvedor / Diagnóstico Avançado (Exclusivo Admin Supremo) */}
+        {/* 2. Ferramentas do Desenvolvedor / Diagnóstico Avançado (Exclusivo Admin Supremo) */}
         {status?.isAdmin && (
           <>
             <div className="pt-2 border-t border-border/60">
