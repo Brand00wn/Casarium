@@ -562,7 +562,7 @@ export default function GiftGrid({
                     {complete ? (
                       awaiting ? (
                         <span className="text-amber-700 font-semibold inline-flex items-center gap-1">
-                          <Hourglass className="w-3.5 h-3.5" /> Aguardando confirmação
+                          <Hourglass className="w-3.5 h-3.5" /> Em compra por alguém
                         </span>
                       ) : (
                         <span className="text-green-700 font-semibold inline-flex items-center gap-1">
@@ -587,7 +587,7 @@ export default function GiftGrid({
                 disabled={complete}
                 onClick={() => openCheckout(gift)}
               >
-                {complete ? (awaiting ? "Aguardando ⏳" : "Completo 🎉") : "Presentear"}
+                {complete ? (awaiting ? "Em compra por alguém 💛" : "Completo 🎉") : "Presentear"}
               </Button>
             </CardFooter>
           </Card>
