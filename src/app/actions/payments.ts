@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { requirePermission } from "@/lib/session";
+import { requirePermission, getCurrentUser } from "@/lib/session";
 import { encryptSecret, decryptSecret } from "@/lib/payment-crypto";
 import { createMpPayment, getMpPayment, applyCardFee, diagnoseMpToken, isTestToken, readRecentMpErrors } from "@/lib/mercadopago";
 import { getSiteUrl } from "@/lib/site-url";
@@ -23,10 +23,13 @@ async function getConfigOrThrow(weddingId: string) {
 
 export async function getPaymentConfigStatus(weddingSlug: string) {
   await requirePermission(weddingSlug, "canEditWedding");
+  const user = await getCurrentUser();
+  const isAdmin = user?.role === "ADMIN";
+
   const wedding = await prisma.wedding.findUnique({ where: { slug: weddingSlug } });
   if (!wedding) throw new Error("Casamento não encontrado");
   const cfg = await prisma.weddingPaymentConfig.findUnique({ where: { weddingId: wedding.id } });
-  if (!cfg) return { configured: false as const };
+  if (!cfg) return { configured: false as const, isAdmin };
   let env: "test" | "production" | "unknown" = "unknown";
   let masked = "••••••••";
   let isEnvMismatch = false;
@@ -58,6 +61,7 @@ export async function getPaymentConfigStatus(weddingSlug: string) {
 
   return {
     configured: true as const,
+    isAdmin,
     mpConnected,
     masked,
     env,

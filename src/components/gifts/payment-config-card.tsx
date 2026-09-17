@@ -302,107 +302,111 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
           </Button>
         </div>
 
-        {/* 3. Ferramentas do Desenvolvedor / Diagnóstico Avançado */}
-        <div className="pt-2 border-t border-border/60">
-          <button
-            type="button"
-            onClick={() => setShowDeveloper(!showDeveloper)}
-            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 font-medium transition-colors"
-          >
-            {showDeveloper ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            {showDeveloper ? "Ocultar ferramentas avançadas do desenvolvedor" : "Ferramentas do Desenvolvedor (Diagnóstico / Chaves Manuais)"}
-          </button>
-        </div>
-
-        {showDeveloper && (
-          <div className="space-y-4 bg-muted/50 p-4 rounded-xl border border-border/80">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-xs">Access Token Manual</Label>
-                <Input
-                  type="password"
-                  value={token}
-                  onChange={(e) => setToken(e.target.value)}
-                  placeholder={status?.mpConnected ? `Token ativo: ${status.masked}` : "TEST-... ou APP_USR-..."}
-                  className="h-9 text-xs"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Public Key Manual</Label>
-                <Input
-                  value={publicKey}
-                  onChange={(e) => setPublicKey(e.target.value)}
-                  placeholder={status?.publicKeySet ? `Chave ativa: ${status.publicKeyHint}` : "TEST-... ou APP_USR-..."}
-                  className="h-9 text-xs"
-                />
-              </div>
+        {/* 3. Ferramentas do Desenvolvedor / Diagnóstico Avançado (Exclusivo Admin Supremo) */}
+        {status?.isAdmin && (
+          <>
+            <div className="pt-2 border-t border-border/60">
+              <button
+                type="button"
+                onClick={() => setShowDeveloper(!showDeveloper)}
+                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 font-medium transition-colors"
+              >
+                {showDeveloper ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                {showDeveloper ? "Ocultar ferramentas avançadas do desenvolvedor" : "Ferramentas do Desenvolvedor (Diagnóstico / Chaves Manuais - Admin Supremo)"}
+              </button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <Button onClick={handleSaveManual} disabled={savingManual} variant="outline" size="sm" className="text-xs">
-                {savingManual ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : null}
-                Salvar chaves manuais
-              </Button>
-              {status?.mpConnected && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={testing}
-                  className="text-xs"
-                  onClick={async () => {
-                    setTesting(true);
-                    try {
-                      const d = await diagnosePaymentConfig(weddingSlug);
-                      toast.success(`Token OK (${d.env}) — conta ${(d as any).email || d.nickname || d.userId} • país ${(d as any).site || "?"}`);
-                    } catch (e: any) {
-                      toast.error(e.message || "Token inválido.");
-                    } finally {
-                      setTesting(false);
-                    }
-                  }}
-                >
-                  {testing ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : null}
-                  Testar API MP
-                </Button>
-              )}
-              {status?.mpConnected && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={loadingErrors}
-                  className="text-xs"
-                  onClick={async () => {
-                    setLoadingErrors(true);
-                    try {
-                      setMpErrors(await getRecentMpErrors(weddingSlug));
-                    } catch (e: any) {
-                      toast.error(e.message || "Erro ao buscar.");
-                    } finally {
-                      setLoadingErrors(false);
-                    }
-                  }}
-                >
-                  {loadingErrors ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : null}
-                  Erros recentes MP
-                </Button>
-              )}
-            </div>
+            {showDeveloper && (
+              <div className="space-y-4 bg-muted/50 p-4 rounded-xl border border-border/80">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className="text-xs">Access Token Manual</Label>
+                    <Input
+                      type="password"
+                      value={token}
+                      onChange={(e) => setToken(e.target.value)}
+                      placeholder={status?.mpConnected ? `Token ativo: ${status.masked}` : "TEST-... ou APP_USR-..."}
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Public Key Manual</Label>
+                    <Input
+                      value={publicKey}
+                      onChange={(e) => setPublicKey(e.target.value)}
+                      placeholder={status?.publicKeySet ? `Chave ativa: ${status.publicKeyHint}` : "TEST-... ou APP_USR-..."}
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                </div>
 
-            {mpErrors && (
-              <div className="rounded-lg border bg-background p-3 space-y-2 max-h-64 overflow-y-auto">
-                {mpErrors.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Nenhum erro de API registrado.</p>
-                ) : (
-                  mpErrors.map((e, i) => (
-                    <div key={i} className="text-xs space-y-1 border-b pb-2 last:border-0 font-mono">
-                      <p className="font-bold">{e.at} — HTTP {e.httpStatus} {e.path}</p>
-                      <p className="text-muted-foreground">{e.snippet}</p>
-                    </div>
-                  ))
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button onClick={handleSaveManual} disabled={savingManual} variant="outline" size="sm" className="text-xs">
+                    {savingManual ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : null}
+                    Salvar chaves manuais
+                  </Button>
+                  {status?.mpConnected && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={testing}
+                      className="text-xs"
+                      onClick={async () => {
+                        setTesting(true);
+                        try {
+                          const d = await diagnosePaymentConfig(weddingSlug);
+                          toast.success(`Token OK (${d.env}) — conta ${(d as any).email || d.nickname || d.userId} • país ${(d as any).site || "?"}`);
+                        } catch (e: any) {
+                          toast.error(e.message || "Token inválido.");
+                        } finally {
+                          setTesting(false);
+                        }
+                      }}
+                    >
+                      {testing ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : null}
+                      Testar API MP
+                    </Button>
+                  )}
+                  {status?.mpConnected && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={loadingErrors}
+                      className="text-xs"
+                      onClick={async () => {
+                        setLoadingErrors(true);
+                        try {
+                          setMpErrors(await getRecentMpErrors(weddingSlug));
+                        } catch (e: any) {
+                          toast.error(e.message || "Erro ao buscar.");
+                        } finally {
+                          setLoadingErrors(false);
+                        }
+                      }}
+                    >
+                      {loadingErrors ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : null}
+                      Erros recentes MP
+                    </Button>
+                  )}
+                </div>
+
+                {mpErrors && (
+                  <div className="rounded-lg border bg-background p-3 space-y-2 max-h-64 overflow-y-auto">
+                    {mpErrors.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Nenhum erro de API registrado.</p>
+                    ) : (
+                      mpErrors.map((e, i) => (
+                        <div key={i} className="text-xs space-y-1 border-b pb-2 last:border-0 font-mono">
+                          <p className="font-bold">{e.at} — HTTP {e.httpStatus} {e.path}</p>
+                          <p className="text-muted-foreground">{e.snippet}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 )}
               </div>
             )}
-          </div>
+          </>
         )}
       </CardContent>
     </Card>
