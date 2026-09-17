@@ -12,6 +12,22 @@ import { getSiteUrl } from "@/lib/site-url";
 
 const QUOTA_HOLD_MINUTES = 40;
 
+/** Cotas ocupadas = PAID + PENDING válido (reserva não expirada ou já
+ *  reivindicada via "já paguei"). É o "hold" que impede dois convidados
+ *  pagarem a mesma cota enquanto a confirmação não sai. */
+async function occupiedQuota(giftId: string): Promise<number> {
+  const now = new Date();
+  const agg = await prisma.transaction.aggregate({
+    where: {
+      giftId,
+      status: { in: ["PAID", "PENDING"] },
+      OR: [{ status: "PAID" }, { expiresAt: { gt: now } }, { claimedAt: { not: null } }],
+    },
+    _sum: { quantity: true },
+  });
+  return agg._sum.quantity || 0;
+}
+
 /** Taxa padrão (crédito à vista D0) até a primeira venda calibrar de verdade. */
 const DEFAULT_CARD_FEE = 4.98;
 
@@ -405,11 +421,7 @@ async function createQuotaPaymentInner(weddingSlug: string, input: CheckoutInput
   if (!gift) return fail("Presente não encontrado.");
 
   const quantity = Math.max(1, Math.floor(input.quantity || 1));
-  const soldAgg = await prisma.transaction.aggregate({
-    where: { giftId: gift.id, status: "PAID" },
-    _sum: { quantity: true },
-  });
-  const remaining = gift.quotaCount - (soldAgg._sum.quantity || 0);
+  const remaining = gift.quotaCount - (await occupiedQuota(gift.id));
   if (remaining <= 0) return fail("Este presente já foi completamente presenteado! 🎉");
   if (quantity > remaining) return fail(`Restam apenas ${remaining} de ${gift.quotaCount} cotas.`);
 
@@ -602,13 +614,9 @@ async function createDirectPixPaymentInner(weddingSlug: string, input: DirectPix
   if (!gift) return fail("Presente não encontrado.");
 
   const quantity = Math.max(1, Math.floor(input.quantity || 1));
-  const soldAgg = await prisma.transaction.aggregate({
-    where: { giftId: gift.id, status: "PAID" },
-    _sum: { quantity: true },
-  });
-  const remaining = gift.quotaCount - (soldAgg._sum.quantity || 0);
+  const remaining = gift.quotaCount - (await occupiedQuota(gift.id));
   if (remaining <= 0) return fail("Este presente já foi completamente presenteado! 🎉");
-  if (quantity > remaining) return fail(`Restam apenas ${remaining} de ${gift.quotaCount} cotas.`);
+  if (quantity > remaining) return fail(`Restam apenas ${remaining} de ${gift.quotaCount} cotas (outras podem estar aguardando confirmação).`);
 
   const quotaValue = gift.price / gift.quotaCount;
   const total = Math.round(quantity * quotaValue * 100) / 100;
@@ -703,6 +711,20 @@ export async function confirmDirectPixPayment(weddingSlug: string, transactionId
   });
   if (!tx) throw new Error("Pagamento não encontrado.");
   if (tx.status !== "PENDING") throw new Error("Pagamento já resolvido.");
+  // Anti-over-sell: se outra pessoa confirmou a cota no meio do caminho,
+  // bloqueia e orienta o estorno em vez de vender 2x a mesma cota.
+  if (tx.giftId) {
+    const gift = await prisma.gift.findUnique({ where: { id: tx.giftId } });
+    if (gift) {
+      const paidOthers = await prisma.transaction.aggregate({
+        where: { giftId: tx.giftId, id: { not: tx.id }, status: "PAID" },
+        _sum: { quantity: true },
+      });
+      if ((paidOthers._sum.quantity || 0) + tx.quantity > gift.quotaCount) {
+        throw new Error("Esta cota já foi presenteada por outro convidado e confirmada. Rejeite este pagamento e combine o estorno com o convidado.");
+      }
+    }
+  }
   await prisma.transaction.update({ where: { id: tx.id }, data: { status: "PAID" } });
   revalidatePath(`/site/${weddingSlug}/presentes`);
   return { ok: true as const };

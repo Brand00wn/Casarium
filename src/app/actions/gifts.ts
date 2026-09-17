@@ -266,6 +266,27 @@ data: { amount: number; paymentMethod: "PIX" | "CREDIT_CARD"; guestName: string;
   return transaction;
 }
 
+/** Cotas em reserva (PENDING válido: não expirado ou já reivindicado) por presente.
+ *  Subtraídas da disponibilidade no site para impedir double-sell. */
+export async function getGiftQuotaHeld(weddingSlug: string) {
+  const now = new Date();
+  const groups = await prisma.transaction.groupBy({
+    by: ["giftId"],
+    where: {
+      wedding: { slug: weddingSlug },
+      status: "PENDING",
+      giftId: { not: null },
+      OR: [{ expiresAt: { gt: now } }, { claimedAt: { not: null } }],
+    },
+    _sum: { quantity: true },
+  });
+  const map: Record<string, number> = {};
+  for (const g of groups) {
+    if (g.giftId) map[g.giftId] = g._sum.quantity || 0;
+  }
+  return map;
+}
+
 /** Cotas já presenteadas (PAID) por presente do casamento. */
 export async function getGiftQuotaSold(weddingSlug: string) {
   const groups = await prisma.transaction.groupBy({

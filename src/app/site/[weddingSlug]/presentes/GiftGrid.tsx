@@ -27,7 +27,7 @@ import {
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { SafeImage } from "@/components/ui/safe-image";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { QrCode, CreditCard, Gift as GiftIcon, Minus, Plus, PartyPopper } from "lucide-react";
+import { QrCode, CreditCard, Gift as GiftIcon, Minus, Plus, PartyPopper, Hourglass } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 
 type GiftWithCategories = Gift & { categories?: GiftCategory[] };
@@ -61,6 +61,7 @@ export default function GiftGrid({
   gifts,
   categories,
   soldByGift,
+  heldByGift,
   weddingId,
   weddingSlug,
   siteGuest,
@@ -68,6 +69,7 @@ export default function GiftGrid({
   gifts: GiftWithCategories[];
   categories: GiftCategory[];
   soldByGift: Record<string, number>;
+  heldByGift: Record<string, number>;
   weddingId: string;
   weddingSlug: string;
   siteGuest?: { id: string, name: string } | null;
@@ -107,7 +109,10 @@ export default function GiftGrid({
   guestRef.current = { name: guestName, email: guestEmail, message: guestMessage };
 
   const soldOf = (gift: GiftWithCategories) => Math.min(soldByGift[gift.id] || 0, gift.quotaCount);
-  const remainingOf = (gift: GiftWithCategories) => Math.max(gift.quotaCount - soldOf(gift), 0);
+  // Em reserva: QR gerado aguardando pagamento/confirmação — bloqueia a cota.
+  const heldOf = (gift: GiftWithCategories) => Math.min(heldByGift[gift.id] || 0, gift.quotaCount);
+  const paidCompleteOf = (gift: GiftWithCategories) => soldOf(gift) >= gift.quotaCount;
+  const remainingOf = (gift: GiftWithCategories) => Math.max(gift.quotaCount - soldOf(gift) - heldOf(gift), 0);
   const quotaValueOf = (gift: GiftWithCategories) => gift.price / gift.quotaCount;
   const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
@@ -521,8 +526,10 @@ export default function GiftGrid({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {visibleGifts.map((gift) => {
           const sold = soldOf(gift);
+          const held = heldOf(gift);
           const remaining = remainingOf(gift);
           const complete = remaining <= 0;
+          const awaiting = complete && !paidCompleteOf(gift);
           const pct = Math.round((sold / gift.quotaCount) * 100);
           return (
           <Card key={gift.id} className="group overflow-hidden flex flex-col rounded-2xl border-border/70 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
@@ -553,11 +560,17 @@ export default function GiftGrid({
                   <Progress value={pct} className="h-2" />
                   <p className="text-xs font-medium text-muted-foreground">
                     {complete ? (
-                      <span className="text-green-700 font-semibold inline-flex items-center gap-1">
-                        <PartyPopper className="w-3.5 h-3.5" /> Presente completo!
-                      </span>
+                      awaiting ? (
+                        <span className="text-amber-700 font-semibold inline-flex items-center gap-1">
+                          <Hourglass className="w-3.5 h-3.5" /> Aguardando confirmação
+                        </span>
+                      ) : (
+                        <span className="text-green-700 font-semibold inline-flex items-center gap-1">
+                          <PartyPopper className="w-3.5 h-3.5" /> Presente completo!
+                        </span>
+                      )
                     ) : (
-                      <>{sold} de {gift.quotaCount} cotas presenteadas · {brl(quotaValueOf(gift))} cada</>
+                      <>{sold} de {gift.quotaCount} cotas presenteadas{held > 0 ? ` · ${held} reservada${held > 1 ? "s" : ""}` : ""} · {brl(quotaValueOf(gift))} cada</>
                     )}
                   </p>
                 </div>
@@ -574,7 +587,7 @@ export default function GiftGrid({
                 disabled={complete}
                 onClick={() => openCheckout(gift)}
               >
-                {complete ? "Completo 🎉" : "Presentear"}
+                {complete ? (awaiting ? "Aguardando ⏳" : "Completo 🎉") : "Presentear"}
               </Button>
             </CardFooter>
           </Card>
