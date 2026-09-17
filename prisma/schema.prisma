@@ -160,10 +160,11 @@ model WeddingPaymentConfig {
   learnedCardFeeUpdatedAt DateTime?
   lastLearnedMpPaymentId  String?
   enabled              Boolean  @default(true)
-  // Chave PIX Direta dos Noivos (0% de taxa - sem intermediários)
+  // Chave PIX Direta dos Noivos (BR Code próprio, 0% de taxa - cidade exigida pelo padrão)
   directPixKey         String?
   directPixKeyType     String?
   directPixHolderName  String?
+  directPixCity        String?
   updatedAt            DateTime @updatedAt
 }
 
@@ -389,6 +390,10 @@ model Transaction {
   giftId        String?
   weddingId     String
   expiresAt     DateTime?
+  // PIX direto (BR Code próprio): txid do payload + carimbo do "já paguei".
+  // externalId fica vazio (não passa pelo MP). Confirmado manualmente.
+  pixTxId       String?
+  claimedAt     DateTime?
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   gift          Gift?             @relation(fields: [giftId], references: [id])

@@ -6,6 +6,8 @@ import { Gift, GiftCategory } from "@prisma/client";
 import { simulateCheckout } from "@/app/actions/gifts";
 import {
   createQuotaPayment,
+  createDirectPixPayment,
+  claimDirectPixPayment,
   getCheckoutStatus,
   isPaymentConfigured,
   getPaymentPublicKey,
@@ -91,6 +93,12 @@ export default function GiftGrid({
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [mpEnv, setMpEnv] = useState<"test" | "production" | null>(null);
   const [pix, setPix] = useState<{ qrCodeBase64: string | null, copyPaste: string | null, transactionId: string, amount: number } | null>(null);
+  // PIX direto (BR Code próprio, sem taxa): QR gerado da chave dos noivos.
+  const [hasMp, setHasMp] = useState(true);
+  const [hasDirectPix, setHasDirectPix] = useState(false);
+  const [pixKind, setPixKind] = useState<"MP" | "DIRECT">("MP");
+  const [dpix, setDpix] = useState<{ qrDataUrl: string | null, copyPaste: string, transactionId: string, amount: number, holderName: string | null } | null>(null);
+  const [dpixClaimed, setDpixClaimed] = useState(false);
   const brickController = useRef<any>(null);
   // O Brick é montado uma vez (useEffect sem guestName nas deps p/ não
   // remontar a cada tecla). Sem ref, o onSubmit enxergaria o nome/e-mail
@@ -112,13 +120,22 @@ export default function GiftGrid({
     setPaymentMethod("PIX");
     setQuotas(1);
     setPix(null);
+    setDpix(null);
+    setDpixClaimed(false);
+    setHasMp(true);
+    setHasDirectPix(false);
+    setPixKind("MP");
     setPayMode("checking");
     setIsOpen(true);
     try {
       const cfg = await isPaymentConfigured(weddingSlug);
       if (cfg.configured) {
         setPayMode("mp");
+        setHasMp(!!cfg.hasMp);
         setMpCard(cfg.hasCard);
+        setHasDirectPix(!!cfg.hasDirectPix);
+        // Sem MP, o PIX é direto; com os dois, padrão é o automático (MP).
+        setPixKind(cfg.hasDirectPix && !cfg.hasMp ? "DIRECT" : "MP");
         setCardFee({ pass: cfg.passCardFeeToGuest, percent: cfg.cardFeePercent });
         setMpEnv((cfg as any).env ?? null);
         if (cfg.hasCard) {
@@ -178,6 +195,8 @@ export default function GiftGrid({
     toast.success(msg);
     setIsOpen(false);
     setPix(null);
+    setDpix(null);
+    setDpixClaimed(false);
     router.refresh();
   };
 
@@ -240,6 +259,82 @@ export default function GiftGrid({
       toast.error(e.message || "Erro ao gerar PIX.");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Polling do PIX direto (confirmação manual dos noivos cai aqui)
+  useEffect(() => {
+    if (!dpix || !isOpen) return;
+    const t = setInterval(async () => {
+      try {
+        const s = await getCheckoutStatus(dpix.transactionId);
+        if (s.status === "PAID") {
+          clearInterval(t);
+          onPaidSuccess("Pagamento confirmado pelos noivos! Muito obrigado pelo presente. 🎉");
+        } else if (s.status === "FAILED") {
+          clearInterval(t);
+          toast.error("Pagamento expirado ou não confirmado. Gere um novo PIX.");
+          setDpix(null);
+          setDpixClaimed(false);
+        }
+      } catch { /* tenta de novo no próximo ciclo */ }
+    }, 5000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dpix, isOpen]);
+
+  const handleGenerateDirectPix = async () => {
+    if (!selectedGift) return;
+    if (!guestName.trim()) {
+      toast.error("Por favor, informe seu nome.");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const res = await createDirectPixPayment(weddingSlug, {
+        giftId: selectedGift.id,
+        quantity: checkoutQty(),
+        guestName,
+        guestMessage,
+        ...(siteGuest ? { guestId: siteGuest.id } : {}),
+      });
+      if (res.ok === false) {
+        toast.error(res.error || "Erro ao gerar PIX.");
+        return;
+      }
+      setDpix({
+        qrDataUrl: res.qrDataUrl,
+        copyPaste: res.copyPaste,
+        transactionId: res.transactionId,
+        amount: res.amount,
+        holderName: res.holderName,
+      });
+      setDpixClaimed(false);
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao gerar PIX.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleClaimDirectPix = async () => {
+    if (!dpix) return;
+    const res = await claimDirectPixPayment(dpix.transactionId);
+    if (res.ok === false) {
+      toast.error(res.error || "Erro ao avisar os noivos.");
+      return;
+    }
+    setDpixClaimed(true);
+    toast.success("Avisamos os noivos! Assim que confirmarem, seu presente entra na lista. 💛");
+  };
+
+  const copyDpix = async () => {
+    if (!dpix?.copyPaste) return;
+    try {
+      await navigator.clipboard.writeText(dpix.copyPaste);
+      toast.success("Código PIX copiado!");
+    } catch {
+      toast.error("Não foi possível copiar. Selecione o código manualmente.");
     }
   };
 
@@ -552,7 +647,7 @@ export default function GiftGrid({
                 />
               </div>
 
-              {payMode === "mp" && paymentMethod === "PIX" && (
+              {payMode === "mp" && paymentMethod === "PIX" && pixKind === "MP" && (
                 <>
                   <div className="space-y-2">
                     <Label htmlFor="email">Seu e-mail (para o pagamento)</Label>
@@ -597,7 +692,7 @@ export default function GiftGrid({
 
               <div className="space-y-2">
                 <Label>Forma de Pagamento</Label>
-                <RadioGroup value={paymentMethod} onValueChange={(v: "PIX" | "CREDIT_CARD") => { setPaymentMethod(v); setPix(null); }} className="flex gap-4">
+                <RadioGroup value={paymentMethod} onValueChange={(v: "PIX" | "CREDIT_CARD") => { setPaymentMethod(v); setPix(null); setDpix(null); setDpixClaimed(false); }} className="flex gap-4">
                   <div className="flex items-center space-x-2 border p-3 rounded-md flex-1 cursor-pointer">
                     <RadioGroupItem value="PIX" id="pix" />
                     <Label htmlFor="pix" className="flex items-center gap-2 cursor-pointer">
@@ -612,6 +707,27 @@ export default function GiftGrid({
                   </div>
                 </RadioGroup>
               </div>
+
+              {payMode === "mp" && paymentMethod === "PIX" && hasMp && hasDirectPix && (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setPixKind("MP"); setDpix(null); setDpixClaimed(false); }}
+                    className={`p-3 rounded-md border text-left transition-all ${pixKind === "MP" ? "border-primary bg-primary/5 shadow-sm" : "border-border/70 hover:border-primary/50"}`}
+                  >
+                    <p className="text-xs font-bold">⚡ Na hora</p>
+                    <p className="text-[11px] text-muted-foreground">Confirmação automática (Mercado Pago)</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setPixKind("DIRECT"); setPix(null); }}
+                    className={`p-3 rounded-md border text-left transition-all ${pixKind === "DIRECT" ? "border-primary bg-primary/5 shadow-sm" : "border-border/70 hover:border-primary/50"}`}
+                  >
+                    <p className="text-xs font-bold">💛 Direto · sem taxa</p>
+                    <p className="text-[11px] text-muted-foreground">Cai 100% p/ os noivos, eles confirmam</p>
+                  </button>
+                </div>
+              )}
 
               {payMode === "checking" && (
                 <p className="text-sm text-center text-muted-foreground">Carregando formas de pagamento...</p>
@@ -649,7 +765,7 @@ export default function GiftGrid({
                 </div>
               )}
 
-              {payMode === "mp" && paymentMethod === "PIX" && !pix && (
+              {payMode === "mp" && paymentMethod === "PIX" && pixKind === "MP" && !pix && (
                 <div className="flex flex-col items-center justify-center space-y-2 bg-muted/50 p-6 rounded-lg border">
                   <QrCode className="w-24 h-24 text-primary" />
                   <p className="text-sm text-center text-muted-foreground">
@@ -658,7 +774,54 @@ export default function GiftGrid({
                 </div>
               )}
 
-              {payMode === "mp" && paymentMethod === "PIX" && pix && (
+              {payMode === "mp" && paymentMethod === "PIX" && pixKind === "DIRECT" && !dpix && (
+                <div className="flex flex-col items-center justify-center space-y-2 bg-muted/50 p-6 rounded-lg border">
+                  <QrCode className="w-24 h-24 text-primary" />
+                  <p className="text-sm text-center text-muted-foreground">
+                    Geramos o PIX direto dos noivos com o valor exato — sem nenhuma taxa.
+                    Após pagar, toque em “Já paguei” e eles confirmam. 💛
+                  </p>
+                </div>
+              )}
+
+              {payMode === "mp" && paymentMethod === "PIX" && pixKind === "DIRECT" && dpix && (
+                <div className="flex flex-col items-center space-y-3 bg-muted/50 p-6 rounded-lg border">
+                  {dpix.qrDataUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={dpix.qrDataUrl} alt="QR Code PIX" className="w-52 h-52 rounded-lg bg-white p-2" />
+                  ) : (
+                    <QrCode className="w-24 h-24 text-primary" />
+                  )}
+                  <p className="font-bold text-xl">
+                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(dpix.amount)}
+                  </p>
+                  {dpix.holderName && (
+                    <p className="text-xs text-muted-foreground text-center">
+                      Favorecido: <strong className="text-foreground">{dpix.holderName}</strong>
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground break-all max-h-20 overflow-y-auto bg-background p-2 rounded border w-full">
+                    {dpix.copyPaste}
+                  </p>
+                  <Button type="button" variant="outline" onClick={copyDpix} className="w-full">
+                    Copiar código PIX
+                  </Button>
+                  {dpixClaimed ? (
+                    <p className="text-xs text-center text-muted-foreground animate-pulse">
+                      Pagamento avisado! Aguardando confirmação dos noivos... 💛
+                    </p>
+                  ) : (
+                    <Button type="button" onClick={handleClaimDirectPix} className="w-full" size="lg">
+                      Já paguei
+                    </Button>
+                  )}
+                  <Button type="button" variant="ghost" size="sm" onClick={() => { setDpix(null); setDpixClaimed(false); }}>
+                    Gerar outro código
+                  </Button>
+                </div>
+              )}
+
+              {payMode === "mp" && paymentMethod === "PIX" && pixKind === "MP" && pix && (
                 <div className="flex flex-col items-center space-y-3 bg-muted/50 p-6 rounded-lg border">
                   {pix.qrCodeBase64 ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -724,9 +887,14 @@ export default function GiftGrid({
                 {isSubmitting ? "Processando..." : "Confirmar Pagamento"}
               </Button>
             )}
-            {payMode === "mp" && paymentMethod === "PIX" && !pix && (
+            {payMode === "mp" && paymentMethod === "PIX" && pixKind === "MP" && !pix && (
               <Button onClick={handleGeneratePix} className="w-full" size="lg" disabled={isSubmitting}>
                 {isSubmitting ? "Gerando..." : `Gerar PIX de ${selectedGift ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(checkoutTotal()) : ""}`}
+              </Button>
+            )}
+            {payMode === "mp" && paymentMethod === "PIX" && pixKind === "DIRECT" && !dpix && (
+              <Button onClick={handleGenerateDirectPix} className="w-full" size="lg" disabled={isSubmitting}>
+                {isSubmitting ? "Gerando..." : `Gerar PIX direto de ${selectedGift ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(checkoutTotal()) : ""}`}
               </Button>
             )}
             {payMode === "checking" && (

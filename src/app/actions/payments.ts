@@ -6,6 +6,8 @@ import { requirePermission, getCurrentUser } from "@/lib/session";
 import { encryptSecret, decryptSecret } from "@/lib/payment-crypto";
 import { createMpPayment, getMpPayment, applyCardFee, diagnoseMpToken, isTestToken, readRecentMpErrors } from "@/lib/mercadopago";
 import type { MpPayment } from "@/lib/mercadopago";
+import { buildPixPayload } from "@/lib/pix-brcode";
+import QRCode from "qrcode";
 import { getSiteUrl } from "@/lib/site-url";
 
 const QUOTA_HOLD_MINUTES = 40;
@@ -130,6 +132,10 @@ export async function getPaymentConfigStatus(weddingSlug: string) {
     learnedCardFeePercent: cfg.learnedCardFeePercent,
     learnedCardFeeSamples: cfg.learnedCardFeeSamples || 0,
     learnedCardFeeUpdatedAt: cfg.learnedCardFeeUpdatedAt,
+    directPixKey: cfg.directPixKey || null,
+    directPixKeyType: cfg.directPixKeyType || "EMAIL",
+    directPixHolderName: cfg.directPixHolderName || null,
+    directPixCity: cfg.directPixCity || null,
     enabled: cfg.enabled,
     updatedAt: cfg.updatedAt,
   };
@@ -146,6 +152,50 @@ export async function disconnectMp(weddingSlug: string) {
       accessTokenEncrypted: null,
       publicKey: null,
     },
+  });
+  revalidatePath(`/${weddingSlug}/presentes`);
+  return { ok: true };
+}
+
+/** Salva a Chave PIX Direta dos noivos (BR Code próprio, 0% de taxa).
+ *  Cidade é exigida pelo padrão do Banco Central. */
+export async function saveDirectPixConfig(weddingSlug: string, data: {
+  key: string;
+  type: string;
+  holderName?: string;
+  city?: string;
+}) {
+  await requirePermission(weddingSlug, "canEditWedding");
+  const wedding = await prisma.wedding.findUnique({ where: { slug: weddingSlug } });
+  if (!wedding) throw new Error("Casamento não encontrado");
+  if (!data.key.trim()) throw new Error("Informe a Chave PIX.");
+  if (!data.holderName?.trim()) throw new Error("Informe o nome do titular.");
+  if (!data.city?.trim()) throw new Error("Informe a cidade da conta (exigida pelo PIX).");
+
+  const existing = await prisma.weddingPaymentConfig.findUnique({ where: { weddingId: wedding.id } });
+  const row = {
+    directPixKey: data.key.trim(),
+    directPixKeyType: data.type || "EMAIL",
+    directPixHolderName: data.holderName.trim(),
+    directPixCity: data.city.trim(),
+  };
+  await prisma.weddingPaymentConfig.upsert({
+    where: { weddingId: wedding.id },
+    create: { weddingId: wedding.id, enabled: true, ...row },
+    update: row,
+  });
+  revalidatePath(`/${weddingSlug}/presentes`);
+  return { ok: true };
+}
+
+/** Remove a Chave PIX Direta (volta a oferecer só o PIX do Mercado Pago). */
+export async function clearDirectPixConfig(weddingSlug: string) {
+  await requirePermission(weddingSlug, "canEditWedding");
+  const wedding = await prisma.wedding.findUnique({ where: { slug: weddingSlug } });
+  if (!wedding) throw new Error("Casamento não encontrado");
+  await prisma.weddingPaymentConfig.update({
+    where: { weddingId: wedding.id },
+    data: { directPixKey: null, directPixKeyType: null, directPixHolderName: null, directPixCity: null },
   });
   revalidatePath(`/${weddingSlug}/presentes`);
   return { ok: true };
@@ -258,13 +308,18 @@ export async function isPaymentConfigured(weddingSlug: string) {
     }
   }
 
-  if (!mpOk) return { configured: false as const };
+  const directPixOk = cfg ? directPixCfgValid(cfg) : false;
+  if (!mpOk && !directPixOk) return { configured: false as const };
 
   const eff = effectiveCardFee(cfg);
   return {
     configured: true as const,
     hasMp: mpOk,
     hasCard: mpOk && !!cfg.publicKey,
+    // PIX direto (BR Code próprio, sem taxa): chave+cidade configuradas.
+    // A chave em si nunca vai ao cliente — só o QR/copia-e-cola gerado.
+    hasDirectPix: directPixOk,
+    directPixHolderName: directPixOk ? cfg.directPixHolderName : null,
     passCardFeeToGuest: cfg.passCardFeeToGuest,
     // % efetivo (aprendido das vendas > manual) — checkout usa este.
     cardFeePercent: eff.percent,
@@ -272,6 +327,10 @@ export async function isPaymentConfigured(weddingSlug: string) {
     cardFeeSamples: cfg.learnedCardFeeSamples || 0,
     env,
   };
+}
+
+function directPixCfgValid(cfg: { directPixKey: string | null; directPixHolderName: string | null; directPixCity: string | null }) {
+  return !!(cfg.directPixKey?.trim() && cfg.directPixHolderName?.trim() && cfg.directPixCity?.trim());
 }
 
 type CheckoutInput = {
@@ -509,6 +568,161 @@ async function createQuotaPaymentInner(weddingSlug: string, input: CheckoutInput
   };
 }
 
+/* ---------------- PIX direto (BR Code próprio, 0% taxa) ---------------- */
+
+type DirectPixInput = {
+  giftId: string;
+  quantity: number;
+  guestName: string;
+  guestMessage?: string;
+  guestId?: string;
+};
+
+/** Gera o QR + copia e cola do PIX direto. Rota pública do site.
+ *  Nunca lança: devolve { ok:false, error }. Sem taxa (valor exato). */
+export async function createDirectPixPayment(weddingSlug: string, input: DirectPixInput) {
+  try {
+    return await createDirectPixPaymentInner(weddingSlug, input);
+  } catch (e: any) {
+    console.error("[createDirectPixPayment]", e?.message || e);
+    return { ok: false as const, error: e?.message || "Erro ao gerar PIX." };
+  }
+}
+
+async function createDirectPixPaymentInner(weddingSlug: string, input: DirectPixInput) {
+  const fail = (error: string) => ({ ok: false as const, error });
+  const wedding = await prisma.wedding.findUnique({ where: { slug: weddingSlug } });
+  if (!wedding) return fail("Casamento não encontrado.");
+  const cfg = await prisma.weddingPaymentConfig.findUnique({ where: { weddingId: wedding.id } });
+  if (!cfg?.enabled || !directPixCfgValid(cfg)) return fail("PIX direto indisponível para este casamento.");
+
+  if (!input.guestName.trim()) return fail("Informe seu nome.");
+
+  const gift = await prisma.gift.findFirst({ where: { id: input.giftId, weddingId: wedding.id } });
+  if (!gift) return fail("Presente não encontrado.");
+
+  const quantity = Math.max(1, Math.floor(input.quantity || 1));
+  const soldAgg = await prisma.transaction.aggregate({
+    where: { giftId: gift.id, status: "PAID" },
+    _sum: { quantity: true },
+  });
+  const remaining = gift.quotaCount - (soldAgg._sum.quantity || 0);
+  if (remaining <= 0) return fail("Este presente já foi completamente presenteado! 🎉");
+  if (quantity > remaining) return fail(`Restam apenas ${remaining} de ${gift.quotaCount} cotas.`);
+
+  const quotaValue = gift.price / gift.quotaCount;
+  const total = Math.round(quantity * quotaValue * 100) / 100;
+
+  const transaction = await prisma.transaction.create({
+    data: {
+      amount: total,
+      quantity,
+      status: "PENDING",
+      paymentMethod: "PIX",
+      guestName: input.guestName.trim(),
+      guestMessage: input.guestMessage || null,
+      expiresAt: new Date(Date.now() + QUOTA_HOLD_MINUTES * 60_000),
+      wedding: { connect: { id: wedding.id } },
+      gift: { connect: { id: gift.id } },
+      ...(input.guestId && { guest: { connect: { id: input.guestId } } }),
+    },
+  });
+
+  // txid do BR Code: id interno (cuid alfanumérico ≤25 chars — válido p/ o BCB).
+  const txid = transaction.id.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 25) || "CASARIUM";
+  await prisma.transaction.update({ where: { id: transaction.id }, data: { pixTxId: txid } });
+
+  let copyPaste: string;
+  try {
+    copyPaste = buildPixPayload({
+      key: cfg.directPixKey!,
+      name: cfg.directPixHolderName!,
+      city: cfg.directPixCity!,
+      amount: total,
+      txid,
+    });
+  } catch (e: any) {
+    await prisma.transaction.update({ where: { id: transaction.id }, data: { status: "FAILED" } });
+    return fail(e?.message || "Chave PIX dos noivos inválida — avise os noivos.");
+  }
+  const qrDataUrl = await QRCode.toDataURL(copyPaste, {
+    width: 400,
+    margin: 2,
+    errorCorrectionLevel: "M",
+  }).catch(() => null);
+
+  revalidatePath(`/site/${weddingSlug}/presentes`);
+  return {
+    ok: true as const,
+    status: "pending" as const,
+    transactionId: transaction.id,
+    amount: total,
+    copyPaste,
+    qrDataUrl,
+    holderName: cfg.directPixHolderName,
+    expiresAt: transaction.expiresAt,
+  };
+}
+
+/** Convidado clicou "Já paguei" — carimba o aviso (segue PENDING até os noivos confirmarem). */
+export async function claimDirectPixPayment(transactionId: string) {
+  try {
+    const tx = await prisma.transaction.findUnique({ where: { id: transactionId } });
+    if (!tx || !tx.pixTxId || tx.status !== "PENDING") {
+      return { ok: false as const, error: "Pagamento não encontrado." };
+    }
+    if (!tx.claimedAt) {
+      await prisma.transaction.update({ where: { id: tx.id }, data: { claimedAt: new Date() } });
+    }
+    return { ok: true as const };
+  } catch (e: any) {
+    console.error("[claimDirectPixPayment]", e?.message || e);
+    return { ok: false as const, error: "Erro ao avisar os noivos." };
+  }
+}
+
+/** PIX direto aguardando confirmação dos noivos (só p/ quem configura). */
+export async function getDirectPixPending(weddingSlug: string) {
+  await requirePermission(weddingSlug, "canEditWedding");
+  const wedding = await prisma.wedding.findUnique({ where: { slug: weddingSlug } });
+  if (!wedding) throw new Error("Casamento não encontrado");
+  return prisma.transaction.findMany({
+    where: { weddingId: wedding.id, status: "PENDING", pixTxId: { not: null } },
+    include: { gift: { select: { name: true } } },
+    orderBy: [{ claimedAt: "asc" }, { createdAt: "desc" }],
+  });
+}
+
+/** Noivos confirmam o recebimento do PIX direto (entra na lista de presentes). */
+export async function confirmDirectPixPayment(weddingSlug: string, transactionId: string) {
+  await requirePermission(weddingSlug, "canEditWedding");
+  const wedding = await prisma.wedding.findUnique({ where: { slug: weddingSlug } });
+  if (!wedding) throw new Error("Casamento não encontrado");
+  const tx = await prisma.transaction.findFirst({
+    where: { id: transactionId, weddingId: wedding.id, pixTxId: { not: null } },
+  });
+  if (!tx) throw new Error("Pagamento não encontrado.");
+  if (tx.status !== "PENDING") throw new Error("Pagamento já resolvido.");
+  await prisma.transaction.update({ where: { id: tx.id }, data: { status: "PAID" } });
+  revalidatePath(`/site/${weddingSlug}/presentes`);
+  return { ok: true as const };
+}
+
+/** Noivos rejeitam (não caiu / expirado) — libera a cota. */
+export async function rejectDirectPixPayment(weddingSlug: string, transactionId: string) {
+  await requirePermission(weddingSlug, "canEditWedding");
+  const wedding = await prisma.wedding.findUnique({ where: { slug: weddingSlug } });
+  if (!wedding) throw new Error("Casamento não encontrado");
+  const tx = await prisma.transaction.findFirst({
+    where: { id: transactionId, weddingId: wedding.id, pixTxId: { not: null } },
+  });
+  if (!tx) throw new Error("Pagamento não encontrado.");
+  if (tx.status !== "PENDING") throw new Error("Pagamento já resolvido.");
+  await prisma.transaction.update({ where: { id: tx.id }, data: { status: "FAILED" } });
+  revalidatePath(`/site/${weddingSlug}/presentes`);
+  return { ok: true as const };
+}
+
 /** Últimos erros crus da API MP deste casamento (só p/ quem configura — diagnóstico). */
 export async function getRecentMpErrors(weddingSlug: string) {
   await requirePermission(weddingSlug, "canEditWedding");
@@ -556,10 +770,11 @@ export async function confirmMpPayment(weddingId: string, mpPaymentId: string | 
   return { ok: true as const, status: tx.status };
 }
 
-/** Expira reservas PIX vencidas (chamado pelo cron diário + após cada checkout). */
+/** Expira reservas PIX vencidas (chamado pelo cron diário + após cada checkout).
+ *  Reivindicados ("já paguei") não expiram sozinhos: aguardam os noivos. */
 export async function expireStalePayments() {
   const res = await prisma.transaction.updateMany({
-    where: { status: "PENDING", expiresAt: { lt: new Date() } },
+    where: { status: "PENDING", claimedAt: null, expiresAt: { lt: new Date() } },
     data: { status: "FAILED" },
   });
   return { expired: res.count };
