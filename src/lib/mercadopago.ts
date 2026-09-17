@@ -204,9 +204,14 @@ export function maxInstallmentsForAmount(total: number): number {
   return Math.min(12, Math.max(1, Math.floor(total / 5)));
 }
 
-/** Taxa do cartão repassada? amount = base * (1 + fee%). */
+/** Repasse da taxa do cartão com "gross-up": o MP cobra fee% sobre o TOTAL
+ *  cobrado — não sobre o valor base. Para os noivos receberem `base` líquidos,
+ *  é preciso cobrar base / (1 - fee%).
+ *  Ex.: base R$50 + 4,98% → total R$52,62 (taxa R$2,62). A conta antiga
+ *  (base * 1,0498 = R$52,49) deixava os noivos com R$49,88, não R$50. */
 export function applyCardFee(base: number, feePercent: number, passToGuest: boolean): { total: number, fee: number } {
   if (!passToGuest || !feePercent) return { total: base, fee: 0 };
-  const fee = Math.round(base * (feePercent / 100) * 100) / 100;
-  return { total: Math.round((base + fee) * 100) / 100, fee };
+  const p = Math.min(90, Math.max(0, feePercent)) / 100;
+  const total = Math.round((base / (1 - p)) * 100) / 100;
+  return { total, fee: Math.round((total - base) * 100) / 100 };
 }

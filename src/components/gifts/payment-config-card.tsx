@@ -104,6 +104,9 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
     }
   };
 
+  const parseFeeInput = (s: string) =>
+    Math.min(30, Math.max(0, Number(s.replace(",", ".")) || 0));
+
   const handleTogglePassFee = async (v: boolean) => {
     // Salva o valor NOVO (v) direto — setPassFee é assíncrono, então ler
     // `passFee` aqui pegaria o valor antigo e o switch voltaria sozinho.
@@ -112,7 +115,7 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
     try {
       await savePaymentConfig(weddingSlug, {
         passCardFeeToGuest: v,
-        cardFeePercent: Number(feePercent) || 0,
+        cardFeePercent: parseFeeInput(feePercent),
         enabled,
       });
       toast.success(v ? "Taxa do cartão será repassada ao convidado." : "Taxa do cartão ficará com os noivos.");
@@ -123,6 +126,22 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
     }
   };
 
+  const handleFeePercentCommit = async () => {
+    const normalized = parseFeeInput(feePercent);
+    setFeePercent(String(normalized));
+    try {
+      await savePaymentConfig(weddingSlug, {
+        passCardFeeToGuest: passFee,
+        cardFeePercent: normalized,
+        enabled,
+      });
+      toast.success(`Taxa do cartão atualizada para ${normalized}%.`);
+      loadStatus();
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao salvar taxa.");
+    }
+  };
+
   const handleSaveManual = async () => {
     setSavingManual(true);
     try {
@@ -130,7 +149,7 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
         ...(token.trim() ? { accessToken: token.trim() } : {}),
         ...(publicKey.trim() ? { publicKey: publicKey.trim() } : {}),
         passCardFeeToGuest: passFee,
-        cardFeePercent: Number(feePercent) || 0,
+        cardFeePercent: parseFeeInput(feePercent),
         enabled,
       });
       setToken("");
@@ -222,11 +241,33 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
           )}
 
           {status?.mpConnected && (
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-3 pt-2 border-t border-border/60">
-              <div className="flex items-center justify-between gap-3">
-                <Label htmlFor="pass-fee" className="text-xs cursor-pointer">Repassar taxa do cartão ({feePercent}%) ao convidado</Label>
-                <Switch id="pass-fee" checked={passFee} onCheckedChange={handleTogglePassFee} />
+            <div className="space-y-2 pt-2 border-t border-border/60">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+                <div className="flex items-center gap-3">
+                  <Label htmlFor="pass-fee" className="text-xs cursor-pointer">Repassar taxa do cartão ao convidado</Label>
+                  <Switch id="pass-fee" checked={passFee} onCheckedChange={handleTogglePassFee} />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Label htmlFor="fee-percent" className="text-xs text-muted-foreground">Taxa</Label>
+                  <Input
+                    id="fee-percent"
+                    type="number"
+                    min={0}
+                    max={30}
+                    step={0.01}
+                    value={feePercent}
+                    onChange={(e) => setFeePercent(e.target.value)}
+                    onBlur={handleFeePercentCommit}
+                    onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                    className="h-8 w-20 text-xs text-right"
+                  />
+                  <span className="text-xs text-muted-foreground">%</span>
+                </div>
               </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Confira a taxa real da conta dos noivos em Mercado Pago → Seu negócio → Custos
+                (depende do prazo de recebimento D0/D14/D30 e do parcelamento). Padrão 4,98% = crédito à vista recebendo na hora.
+              </p>
             </div>
           )}
         </div>

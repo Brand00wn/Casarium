@@ -11,6 +11,7 @@ import {
   getPaymentPublicKey,
 } from "@/app/actions/payments";
 import { toast } from "sonner";
+import { applyCardFee } from "@/lib/mercadopago";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -182,8 +183,12 @@ export default function GiftGrid({
 
   const checkoutQty = () => (selectedGift && selectedGift.quotaCount > 1 ? quotas : 1);
   const checkoutBase = () => (selectedGift ? quotaValueOf(selectedGift) * checkoutQty() : 0);
-  const cardFeeValue = () => (cardFee.pass ? Math.round(checkoutBase() * (cardFee.percent / 100) * 100) / 100 : 0);
-  const checkoutTotal = () => Math.round((checkoutBase() + (paymentMethod === "CREDIT_CARD" ? cardFeeValue() : 0)) * 100) / 100;
+  // Mesma fórmula do servidor (gross-up) — o total exibido é o total cobrado.
+  const feeCalc = () => (paymentMethod === "CREDIT_CARD"
+    ? applyCardFee(checkoutBase(), cardFee.percent, cardFee.pass)
+    : { total: checkoutBase(), fee: 0 });
+  const cardFeeValue = () => feeCalc().fee;
+  const checkoutTotal = () => feeCalc().total;
 
   const validGuest = (requireCpf = false) => {
     if (!guestName.trim()) {
@@ -697,7 +702,10 @@ export default function GiftGrid({
                   )}
                   {cardFee.pass && cardFee.percent > 0 && selectedGift && (
                     <p className="text-xs text-muted-foreground text-center">
-                      Total com taxa do cartão ({cardFee.percent}%):{" "}
+                      {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(checkoutBase())}
+                      {" "} + taxa do cartão ({cardFee.percent}% ={" "}
+                      {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cardFeeValue())}
+                      ) ={" "}
                       <strong className="text-foreground">
                         {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(checkoutTotal())}
                       </strong>
