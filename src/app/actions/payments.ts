@@ -29,11 +29,24 @@ export async function getPaymentConfigStatus(weddingSlug: string) {
   if (!cfg) return { configured: false as const };
   let env: "test" | "production" | "unknown" = "unknown";
   let masked = "••••••••";
+  let isEnvMismatch = false;
+  let pkEnv: "test" | "production" | null = null;
   try {
     const raw = decryptSecret(cfg.accessTokenEncrypted);
-    masked = `••••${raw.slice(-4)}`;
-    if (raw.startsWith("TEST-")) env = "test";
-    else if (raw.startsWith("APP_USR-")) env = "production";
+    const tokenPrefix = raw.startsWith("TEST-") ? "TEST-" : raw.startsWith("APP_USR-") ? "APP_USR-" : "";
+    masked = `${tokenPrefix}••••${raw.slice(-4)}`;
+    env = raw.startsWith("TEST-") ? "test" : "production";
+
+    if (cfg.publicKey) {
+      pkEnv = (cfg.publicKey.startsWith("TEST-") || cfg.publicKey.startsWith("PK_TEST-"))
+        ? "test"
+        : (cfg.publicKey.startsWith("APP_USR-") || cfg.publicKey.startsWith("PK_PROD-"))
+          ? "production"
+          : null;
+      if (pkEnv && pkEnv !== env) {
+        isEnvMismatch = true;
+      }
+    }
   } catch {
     return { configured: false as const };
   }
@@ -41,8 +54,12 @@ export async function getPaymentConfigStatus(weddingSlug: string) {
     configured: true as const,
     masked,
     env,
+    pkEnv,
+    isEnvMismatch,
     publicKeySet: !!cfg.publicKey,
-    publicKeyHint: cfg.publicKey ? `${cfg.publicKey.slice(0, 9)}…${cfg.publicKey.slice(-4)}` : null,
+    publicKeyHint: cfg.publicKey
+      ? `${cfg.publicKey.slice(0, cfg.publicKey.startsWith("TEST-") ? 5 : 8)}••••${cfg.publicKey.slice(-4)}`
+      : null,
     passCardFeeToGuest: cfg.passCardFeeToGuest,
     cardFeePercent: cfg.cardFeePercent,
     enabled: cfg.enabled,
@@ -53,6 +70,7 @@ export async function getPaymentConfigStatus(weddingSlug: string) {
 export async function savePaymentConfig(weddingSlug: string, data: {
   accessToken?: string;
   publicKey?: string;
+  clearPublicKey?: boolean;
   passCardFeeToGuest?: boolean;
   cardFeePercent?: number;
   enabled?: boolean;
@@ -76,20 +94,26 @@ export async function savePaymentConfig(weddingSlug: string, data: {
     ? (existing?.cardFeePercent ?? 4.98)
     : Math.min(30, Math.max(0, Number(data.cardFeePercent) || 0));
 
+  let newPublicKey = existing?.publicKey || null;
+  if (data.clearPublicKey) {
+    newPublicKey = null;
+  } else if (keyTrimmed) {
+    newPublicKey = keyTrimmed;
+  }
+
   return prisma.weddingPaymentConfig.upsert({
     where: { weddingId: wedding.id },
     create: {
       weddingId: wedding.id,
       accessTokenEncrypted: encrypted,
-      publicKey: keyTrimmed || existing?.publicKey || null,
+      publicKey: newPublicKey,
       passCardFeeToGuest: data.passCardFeeToGuest ?? existing?.passCardFeeToGuest ?? false,
       cardFeePercent: fee,
       enabled: data.enabled ?? existing?.enabled ?? true,
     },
     update: {
       ...(tokenTrimmed ? { accessTokenEncrypted: encrypted } : {}),
-      // Campo vazio = manter a chave atual (nunca apaga sem querer)
-      ...(keyTrimmed ? { publicKey: keyTrimmed } : {}),
+      publicKey: newPublicKey,
       ...(data.passCardFeeToGuest !== undefined && { passCardFeeToGuest: data.passCardFeeToGuest }),
       cardFeePercent: fee,
       ...(data.enabled !== undefined && { enabled: data.enabled }),

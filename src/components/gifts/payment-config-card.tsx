@@ -94,31 +94,62 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
       <CardContent className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label>Access Token (produção)</Label>
+            <Label>Access Token (Mercado Pago)</Label>
             <Input
               type="password"
               value={token}
               onChange={(e) => setToken(e.target.value)}
-              placeholder={status?.configured ? "•••• (preenchido — só troque se precisar)" : "APP_USR-..."}
+              placeholder={status?.configured ? `Salvo: ${status.masked} (só digite para trocar)` : "TEST-... ou APP_USR-..."}
             />
+            {status?.configured && (
+              <p className="text-xs text-muted-foreground">
+                Token ativo: <code className="font-mono font-bold text-foreground">{status.masked}</code>
+              </p>
+            )}
           </div>
           <div className="space-y-2">
-            <Label>Public Key (para cartão)</Label>
+            <div className="flex items-center justify-between">
+              <Label>Public Key (para cartão)</Label>
+              {status?.publicKeySet && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setSaving(true);
+                    try {
+                      await savePaymentConfig(weddingSlug, { clearPublicKey: true });
+                      setPublicKey("");
+                      const s = await getPaymentConfigStatus(weddingSlug);
+                      setStatus(s);
+                      toast.success("Public Key removida.");
+                    } catch (e: any) {
+                      toast.error(e.message || "Erro ao remover.");
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
+                  className="text-xs text-red-600 hover:underline"
+                >
+                  Limpar chave
+                </button>
+              )}
+            </div>
             <Input
               value={publicKey}
               onChange={(e) => setPublicKey(e.target.value)}
-              placeholder={status?.publicKeySet ? "•••• preenchida ✓ (só digite para trocar)" : "APP_USR-... ou TEST-..."}
+              placeholder={status?.publicKeySet ? `Salva: ${status.publicKeyHint} (só digite para trocar)` : "TEST-... ou APP_USR-..."}
             />
-            {envMismatch && (
-              <p className="text-xs font-medium text-red-600">
-                ⚠️ Chave de {typedKeyEnv === "test" ? "teste" : "produção"} com token de {status.env === "test" ? "teste" : "produção"} — precisam ser do MESMO ambiente.
+            {status?.publicKeyHint && (
+              <p className="text-xs text-muted-foreground">
+                Public Key ativa: <code className="font-mono font-bold text-foreground">{status.publicKeyHint}</code>
+              </p>
+            )}
+            {(status?.isEnvMismatch || envMismatch) && (
+              <p className="text-xs font-semibold text-red-600 bg-red-50 p-2 rounded border border-red-200">
+                🚨 ATENÇÃO: Ambiente de Token ({status?.env === "test" ? "TESTE TEST-" : "PRODUÇÃO APP_USR-"}) divergente da Public Key ({status?.pkEnv === "test" ? "TESTE TEST-" : "PRODUÇÃO APP_USR-"}). Ambos precisam ser do MESMO ambiente da mesma aplicação!
               </p>
             )}
             {!publicKey && !status?.publicKeySet && (
-              <p className="text-xs text-muted-foreground">Sem ela, só PIX. Use a Public Key do mesmo ambiente do token.</p>
-            )}
-            {status?.publicKeyHint && (
-              <p className="text-xs text-muted-foreground">Chave salva: <code className="font-mono">{status.publicKeyHint}</code> + token {status.masked} — precisam ser da MESMA aplicação (Suas integrações → sua app → Testes → Credenciais de teste).</p>
+              <p className="text-xs text-muted-foreground">Sem Public Key, o sistema aceitará apenas PIX. Cadastre a Public Key do mesmo ambiente do token para ativar cartão.</p>
             )}
           </div>
         </div>
