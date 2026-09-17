@@ -364,6 +364,13 @@ async function createQuotaPaymentInner(weddingSlug: string, input: CheckoutInput
     return fail("Dados do cartão inválidos — tente novamente.");
   }
 
+  // Repasse ligado = somente à vista: o custo extra do parcelamento ficaria
+  // com os noivos e quebraria a garantia do valor cheio. Barreira no
+  // servidor (a trava do Brick na tela pode ser burlada via API).
+  if (input.paymentMethod === "CREDIT_CARD" && cfg.passCardFeeToGuest && (input.installments || 1) > 1) {
+    return fail("Com o repasse da taxa ativado, o cartão é somente à vista (1x).");
+  }
+
   // PIX via MP exige CPF válido + nome/sobrenome — sem isso o MP devolve
   // HTTP 400 13253 "Error in Financial Identity Use Case".
   let pixFirstName: string | undefined;

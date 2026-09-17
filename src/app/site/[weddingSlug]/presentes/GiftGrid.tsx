@@ -284,8 +284,10 @@ export default function GiftGrid({
       const mp = new w.MercadoPago(publicKey, { locale: "pt-BR" });
       const bricks = mp.bricks();
       // Parcela mínima ~R$5: evita o Brick oferecer 12x num valor baixo que o
-      // MP recusa com "excluded by a rule".
-      const maxInstallments = Math.min(12, Math.max(1, Math.floor(checkoutTotal() / 5)));
+      // MP recusa com "excluded by a rule". Com repasse ligado, somente à
+      // vista (1x): o parcelado tem custo extra da operadora que o repasse
+      // não cobre — travar em 1x garante os noivos recebendo o valor cheio.
+      const maxInstallments = cardFee.pass ? 1 : Math.min(12, Math.max(1, Math.floor(checkoutTotal() / 5)));
       bricks.create("cardPayment", "mp-card-brick", {
         initialization: { amount: checkoutTotal() },
         customization: {
@@ -356,7 +358,7 @@ export default function GiftGrid({
       brickController.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, payMode, paymentMethod, publicKey, selectedGift?.id, quotas]);
+  }, [isOpen, payMode, paymentMethod, publicKey, selectedGift?.id, quotas, cardFee.pass, cardFee.percent]);
 
   const copyPix = async () => {
     if (!pix?.copyPaste) return;
@@ -709,6 +711,7 @@ export default function GiftGrid({
                       <strong className="text-foreground">
                         {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(checkoutTotal())}
                       </strong>
+                      {" "}· somente à vista
                     </p>
                   )}
                   <div id="mp-card-brick" className="min-h-[200px]" />
