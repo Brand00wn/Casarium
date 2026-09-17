@@ -247,26 +247,19 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
                   <Label htmlFor="pass-fee" className="text-xs cursor-pointer">Repassar taxa do cartão ao convidado</Label>
                   <Switch id="pass-fee" checked={passFee} onCheckedChange={handleTogglePassFee} />
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <Label htmlFor="fee-percent" className="text-xs text-muted-foreground">Taxa</Label>
-                  <Input
-                    id="fee-percent"
-                    type="number"
-                    min={0}
-                    max={30}
-                    step={0.01}
-                    value={feePercent}
-                    onChange={(e) => setFeePercent(e.target.value)}
-                    onBlur={handleFeePercentCommit}
-                    onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                    className="h-8 w-20 text-xs text-right"
-                  />
-                  <span className="text-xs text-muted-foreground">%</span>
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  Taxa atual:{" "}
+                  <strong className="text-foreground">
+                    {status?.effectiveCardFeePercent ?? status?.cardFeePercent ?? 4.98}%
+                  </strong>{" "}
+                  {status?.cardFeeSource === "learned"
+                    ? `· detectada automaticamente (${status?.learnedCardFeeSamples || 0} ${(status?.learnedCardFeeSamples || 0) === 1 ? "venda" : "vendas"})`
+                    : "· padrão (calibra sozinha após a 1ª venda no cartão)"}
+                </p>
               </div>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                Confira a taxa real da conta dos noivos em Mercado Pago → Seu negócio → Custos
-                (depende do prazo de recebimento D0/D14/D30 e do parcelamento). Padrão 4,98% = crédito à vista recebendo na hora.
+                A taxa é apurada de cada venda aprovada direto na conta do Mercado Pago —
+                ninguém precisa configurar nada.
               </p>
             </div>
           )}
@@ -288,7 +281,7 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
 
             {showDeveloper && (
               <div className="space-y-4 bg-muted/50 p-4 rounded-xl border border-border/80">
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 md:grid-cols-3">
                   <div className="space-y-2">
                     <Label className="text-xs">Access Token Manual</Label>
                     <Input
@@ -307,6 +300,24 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
                       placeholder={status?.publicKeySet ? `Chave ativa: ${status.publicKeyHint}` : "TEST-... ou APP_USR-..."}
                       className="h-9 text-xs"
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Override manual da taxa (%)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={30}
+                      step={0.01}
+                      value={feePercent}
+                      onChange={(e) => setFeePercent(e.target.value)}
+                      onBlur={handleFeePercentCommit}
+                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                      placeholder="ex: 4.98"
+                      className="h-9 text-xs"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Usado só se não houver taxa aprendida. A aprendida vale sempre que existir.
+                    </p>
                   </div>
                 </div>
 

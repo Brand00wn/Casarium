@@ -5,9 +5,60 @@ import { revalidatePath } from "next/cache";
 import { requirePermission, getCurrentUser } from "@/lib/session";
 import { encryptSecret, decryptSecret } from "@/lib/payment-crypto";
 import { createMpPayment, getMpPayment, applyCardFee, diagnoseMpToken, isTestToken, readRecentMpErrors } from "@/lib/mercadopago";
+import type { MpPayment } from "@/lib/mercadopago";
 import { getSiteUrl } from "@/lib/site-url";
 
 const QUOTA_HOLD_MINUTES = 40;
+
+/** Taxa padrão (crédito à vista D0) até a primeira venda calibrar de verdade. */
+const DEFAULT_CARD_FEE = 4.98;
+
+/** Taxa efetiva do cartão: aprendida das vendas reais > override manual/admin > padrão. */
+function effectiveCardFee(cfg: { cardFeePercent: number; learnedCardFeePercent: number | null }): {
+  percent: number; source: "learned" | "manual";
+} {
+  if (cfg.learnedCardFeePercent != null && cfg.learnedCardFeePercent > 0) {
+    return { percent: Math.round(cfg.learnedCardFeePercent * 100) / 100, source: "learned" };
+  }
+  return { percent: cfg.cardFeePercent || DEFAULT_CARD_FEE, source: "manual" };
+}
+
+/** Aprende a taxa real cobrada pelo MP a partir de um pagamento aprovado
+ *  (campo fee_details da API — dado direto da conta, sem chute).
+ *  Só cartão de crédito à vista (1x) em produção: parcelado tem custo extra
+ *  por parcela e pagamento de teste não reflete a conta real.
+ *  Nunca quebra o fluxo de pagamento (try/catch total). */
+async function learnCardFeeFromMp(weddingId: string, mp: MpPayment, opts: { isTest: boolean }) {
+  try {
+    if (opts.isTest || mp.status !== "approved") return;
+    if (mp.payment_type_id !== "credit_card" || (mp.installments ?? 1) !== 1) return;
+    const total = Number(mp.transaction_amount);
+    const fees = Array.isArray(mp.fee_details) ? mp.fee_details : [];
+    const collectorFees = fees.filter((f) => (f?.fee_payer || "collector") === "collector");
+    const mpFees = collectorFees.filter((f) => (f?.type || "").toLowerCase().includes("mercadopago"));
+    const pool = mpFees.length > 0 ? mpFees : collectorFees;
+    const fee = pool.reduce((s, f) => s + (Number(f?.amount) || 0), 0);
+    if (!total || !(fee > 0)) return;
+    const sample = (fee / total) * 100;
+    if (!(sample > 0 && sample < 30)) return; // sanidade
+    const cfg = await prisma.weddingPaymentConfig.findUnique({ where: { weddingId } });
+    if (!cfg || cfg.lastLearnedMpPaymentId === String(mp.id)) return; // já aprendido
+    // Média móvel das últimas ~20 vendas: calibra rápido e acompanha mudanças.
+    const n = Math.min(cfg.learnedCardFeeSamples || 0, 19);
+    const avg = cfg.learnedCardFeePercent == null
+      ? sample
+      : cfg.learnedCardFeePercent + (sample - cfg.learnedCardFeePercent) / (n + 1);
+    await prisma.weddingPaymentConfig.update({
+      where: { weddingId },
+      data: {
+        learnedCardFeePercent: Math.round(avg * 1000) / 1000,
+        learnedCardFeeSamples: (cfg.learnedCardFeeSamples || 0) + 1,
+        learnedCardFeeUpdatedAt: new Date(),
+        lastLearnedMpPaymentId: String(mp.id),
+      },
+    });
+  } catch { /* aprendizado nunca pode quebrar o pagamento */ }
+}
 
 async function getConfigOrThrow(weddingId: string) {
   const cfg = await prisma.weddingPaymentConfig.findUnique({ where: { weddingId } });
@@ -73,6 +124,12 @@ export async function getPaymentConfigStatus(weddingSlug: string) {
       : null,
     passCardFeeToGuest: cfg.passCardFeeToGuest,
     cardFeePercent: cfg.cardFeePercent,
+    // Taxa efetiva (aprendida > manual) — é o que o checkout realmente usa.
+    effectiveCardFeePercent: effectiveCardFee(cfg).percent,
+    cardFeeSource: effectiveCardFee(cfg).source,
+    learnedCardFeePercent: cfg.learnedCardFeePercent,
+    learnedCardFeeSamples: cfg.learnedCardFeeSamples || 0,
+    learnedCardFeeUpdatedAt: cfg.learnedCardFeeUpdatedAt,
     enabled: cfg.enabled,
     updatedAt: cfg.updatedAt,
   };
@@ -203,12 +260,16 @@ export async function isPaymentConfigured(weddingSlug: string) {
 
   if (!mpOk) return { configured: false as const };
 
+  const eff = effectiveCardFee(cfg);
   return {
     configured: true as const,
     hasMp: mpOk,
     hasCard: mpOk && !!cfg.publicKey,
     passCardFeeToGuest: cfg.passCardFeeToGuest,
-    cardFeePercent: cfg.cardFeePercent,
+    // % efetivo (aprendido das vendas > manual) — checkout usa este.
+    cardFeePercent: eff.percent,
+    cardFeeSource: eff.source,
+    cardFeeSamples: cfg.learnedCardFeeSamples || 0,
     env,
   };
 }
@@ -296,7 +357,7 @@ async function createQuotaPaymentInner(weddingSlug: string, input: CheckoutInput
   const quotaValue = gift.price / gift.quotaCount;
   const base = Math.round(quantity * quotaValue * 100) / 100;
   const { total, fee } = input.paymentMethod === "CREDIT_CARD"
-    ? applyCardFee(base, cfg.cardFeePercent, cfg.passCardFeeToGuest)
+    ? applyCardFee(base, effectiveCardFee(cfg).percent, cfg.passCardFeeToGuest)
     : { total: base, fee: 0 };
 
   if (input.paymentMethod === "CREDIT_CARD" && !input.cardToken) {
@@ -422,6 +483,9 @@ async function createQuotaPaymentInner(weddingSlug: string, input: CheckoutInput
   }
 
   if (mp.status === "approved") {
+    // Cartão aprovado na hora: aprende a taxa real desta venda (dedupe
+    // garante que o webhook não conte a mesma venda 2x).
+    await learnCardFeeFromMp(wedding.id, mp, { isTest: isTestToken(accessToken) });
     return { ok: true as const, status: "approved" as const, transactionId: transaction.id, amount: total, fee };
   }
   await prisma.transaction.update({
@@ -472,6 +536,8 @@ export async function confirmMpPayment(weddingId: string, mpPaymentId: string | 
     if (tx.status !== "PAID") {
       await prisma.transaction.update({ where: { id: tx.id }, data: { status: "PAID" } });
     }
+    // Aprende a taxa real desta venda para calibrar os próximos repasses.
+    await learnCardFeeFromMp(weddingId, mp, { isTest: isTestToken(accessToken) });
     return { ok: true as const, status: "PAID" as const };
   }
   if (["rejected", "cancelled", "refunded", "charged_back"].includes(mp.status)) {

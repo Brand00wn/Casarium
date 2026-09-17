@@ -32,6 +32,9 @@ export type MpPayment = {
   statusDetail?: string;
   external_reference?: string;
   transaction_amount?: number;
+  installments?: number;
+  payment_type_id?: string; // "credit_card" | "bank_transfer" | ...
+  fee_details?: { type?: string; amount?: number; fee_payer?: string }[];
   pointOfInteraction?: {
     transactionData?: { qrCode?: string; qrCodeBase64?: string; ticketUrl?: string };
   };
@@ -142,7 +145,7 @@ export async function createMpPayment(accessToken: string, input: MpPaymentInput
   // recusa. Doc: transaction_amount + description + payment_method_id=pix +
   // payer(email, first_name, last_name, identification CPF).
   if (input.paymentMethodId === "pix") {
-    return mpFetch(accessToken, "/v1/payments", {
+    const raw = await mpFetch(accessToken, "/v1/payments", {
       method: "POST",
       body: JSON.stringify({
         transaction_amount: Math.round(input.transactionAmount * 100) / 100,
@@ -154,10 +157,11 @@ export async function createMpPayment(accessToken: string, input: MpPaymentInput
         ...(notificationUrl ? { notification_url: notificationUrl } : {}),
       }),
     }, { context: input.debugContext });
+    return normalizeMpPayment(raw);
   }
 
   const installments = Math.max(1, Math.floor(input.installments ?? 1));
-  return mpFetch(accessToken, "/v1/payments", {
+  const raw = await mpFetch(accessToken, "/v1/payments", {
     method: "POST",
     body: JSON.stringify({
       transaction_amount: Math.round(input.transactionAmount * 100) / 100,
@@ -170,10 +174,12 @@ export async function createMpPayment(accessToken: string, input: MpPaymentInput
       ...(notificationUrl ? { notification_url: notificationUrl } : {}),
     }),
   }, { context: input.debugContext });
+  return normalizeMpPayment(raw);
 }
 
 export async function getMpPayment(accessToken: string, paymentId: string | number): Promise<MpPayment> {
-  return mpFetch(accessToken, `/v1/payments/${paymentId}`, undefined, { idempotent: false });
+  const raw = await mpFetch(accessToken, `/v1/payments/${paymentId}`, undefined, { idempotent: false });
+  return normalizeMpPayment(raw);
 }
 
 /** Valida o token sem cobrar nada: quem é o dono + métodos ativos. */
@@ -196,6 +202,35 @@ export async function diagnoseMpToken(accessToken: string): Promise<{
   } catch (e: any) {
     return { env, rawError: e?.message || "Token inválido ou sem permissão." };
   }
+}
+
+/** A API do MP devolve snake_case; nosso código usa camelCase. Normaliza os
+ *  campos que lemos para funcionar nos dois formatos (sem isso o QR do PIX
+ *  vinha sempre nulo mesmo com pagamento criado). */
+function normalizeMpPayment(raw: any): MpPayment {
+  const poi = raw?.point_of_interaction ?? raw?.pointOfInteraction;
+  const td = poi?.transaction_data ?? poi?.transactionData;
+  const feeDetails = raw?.fee_details ?? raw?.feeDetails;
+  return {
+    ...raw,
+    id: raw?.id,
+    status: raw?.status,
+    statusDetail: raw?.status_detail ?? raw?.statusDetail,
+    external_reference: raw?.external_reference,
+    transaction_amount: raw?.transaction_amount != null ? Number(raw.transaction_amount) : undefined,
+    installments: raw?.installments != null ? Number(raw.installments) : undefined,
+    payment_type_id: raw?.payment_type_id ?? raw?.paymentTypeId,
+    fee_details: Array.isArray(feeDetails)
+      ? feeDetails.map((f: any) => ({ type: f?.type, amount: f?.amount != null ? Number(f.amount) : undefined, fee_payer: f?.fee_payer ?? f?.feePayer }))
+      : undefined,
+    pointOfInteraction: poi ? {
+      transactionData: {
+        qrCode: td?.qr_code ?? td?.qrCode,
+        qrCodeBase64: td?.qr_code_base64 ?? td?.qrCodeBase64,
+        ticketUrl: td?.ticket_url ?? td?.ticketUrl,
+      },
+    } : undefined,
+  };
 }
 
 /** Parcela mínima ~R$5: evita oferecer 12x num valor que o MP recusa por regra. */

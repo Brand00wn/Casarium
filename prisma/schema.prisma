@@ -151,6 +151,14 @@ model WeddingPaymentConfig {
   passCardFeeToGuest   Boolean  @default(false)
   cardFeePercent       Float    @default(4.98)
   pixFeePercent        Float    @default(0.99)
+  // Taxa real aprendida das vendas aprovadas no cartão à vista (1x): média
+  // móvel das últimas ~20 vendas. Quando existe, vale sobre cardFeePercent
+  // (que vira override manual de admin). Calibragem automática — ver
+  // learnCardFeeFromMp em src/app/actions/payments.ts.
+  learnedCardFeePercent   Float?
+  learnedCardFeeSamples   Int       @default(0)
+  learnedCardFeeUpdatedAt DateTime?
+  lastLearnedMpPaymentId  String?
   enabled              Boolean  @default(true)
   // Chave PIX Direta dos Noivos (0% de taxa - sem intermediários)
   directPixKey         String?
