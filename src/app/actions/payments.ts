@@ -260,15 +260,22 @@ async function createQuotaPaymentInner(weddingSlug: string, input: CheckoutInput
     if (/2034|invalid_users_involved/i.test(rawMsg)) {
       try {
         const diag = await diagnoseMpToken(accessToken);
-        if (diag.email) {
-          await prisma.transaction.update({
-            where: { id: transaction.id },
-            data: { status: "FAILED" },
-          });
+        const sellerEmail = (diag.email || "").trim().toLowerCase();
+        const buyerEmail = input.guestEmail.trim().toLowerCase();
+        await prisma.transaction.update({
+          where: { id: transaction.id },
+          data: { status: "FAILED" },
+        });
+        // Só acusa "mesmo e-mail" quando confere de verdade — em TEST o MP
+        // dá 2034 mesmo com e-mails diferentes (comprador genérico fora da app).
+        if (sellerEmail && sellerEmail === buyerEmail) {
           return fail(
-            `O e-mail ${input.guestEmail.trim()} é o mesmo da conta que recebe (${diag.email}). O Mercado Pago bloqueia pagar para si mesmo (erro 2034). Teste com um e-mail DIFERENTE — em produção use outro e-mail/cartão, em TESTE use test@testuser.com com conta vendedora de teste separada.`
+            `O e-mail ${input.guestEmail.trim()} é o mesmo da conta que recebe (${diag.email}). O Mercado Pago bloqueia pagar para si mesmo (erro 2034). Teste com um e-mail DIFERENTE.`
           );
         }
+        return fail(
+          `Mercado Pago recusou com erro 2034 mesmo com e-mails diferentes (comprador ${input.guestEmail.trim()} × conta ${diag.email || "desconhecida"}). Em TESTE isso indica comprador fora da sua aplicação: crie uma conta de teste do tipo Comprador em Suas integrações → sua app → Contas de teste e use o e-mail dela; confira também se o Access Token é o de TESTE da MESMA app (o atual começa com APP_USR-) e teste com valor de R$ 10+.`
+        );
       } catch { /* cai no fail genérico abaixo */ }
     }
     await prisma.transaction.update({
