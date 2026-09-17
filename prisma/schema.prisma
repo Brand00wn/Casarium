@@ -145,13 +145,17 @@ model WeddingPaymentConfig {
   weddingId            String   @unique
   wedding              Wedding  @relation(fields: [weddingId], references: [id], onDelete: Cascade)
   provider             String   @default("MERCADOPAGO")
-  accessTokenEncrypted String   @db.Text
+  accessTokenEncrypted String?  @db.Text
   publicKey            String?
   // Quem absorve a taxa do cartão? false = noivos absorvem (default), true = repassa ao convidado
   passCardFeeToGuest   Boolean  @default(false)
   cardFeePercent       Float    @default(4.98)
   pixFeePercent        Float    @default(0.99)
   enabled              Boolean  @default(true)
+  // Chave PIX Direta dos Noivos (0% de taxa - sem intermediários)
+  directPixKey         String?
+  directPixKeyType     String?
+  directPixHolderName  String?
   updatedAt            DateTime @updatedAt
 }
 

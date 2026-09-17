@@ -31,27 +31,34 @@ export async function getPaymentConfigStatus(weddingSlug: string) {
   let masked = "••••••••";
   let isEnvMismatch = false;
   let pkEnv: "test" | "production" | null = null;
-  try {
-    const raw = decryptSecret(cfg.accessTokenEncrypted);
-    const tokenPrefix = raw.startsWith("TEST-") ? "TEST-" : raw.startsWith("APP_USR-") ? "APP_USR-" : "";
-    masked = `${tokenPrefix}••••${raw.slice(-4)}`;
-    env = raw.startsWith("TEST-") ? "test" : "production";
+  let mpConnected = false;
 
-    if (cfg.publicKey) {
-      pkEnv = (cfg.publicKey.startsWith("TEST-") || cfg.publicKey.startsWith("PK_TEST-"))
-        ? "test"
-        : (cfg.publicKey.startsWith("APP_USR-") || cfg.publicKey.startsWith("PK_PROD-"))
-          ? "production"
-          : null;
-      if (pkEnv && pkEnv !== env) {
-        isEnvMismatch = true;
+  if (cfg.accessTokenEncrypted) {
+    try {
+      const raw = decryptSecret(cfg.accessTokenEncrypted);
+      const tokenPrefix = raw.startsWith("TEST-") ? "TEST-" : raw.startsWith("APP_USR-") ? "APP_USR-" : "";
+      masked = `${tokenPrefix}••••${raw.slice(-4)}`;
+      env = raw.startsWith("TEST-") ? "test" : "production";
+      mpConnected = true;
+
+      if (cfg.publicKey) {
+        pkEnv = (cfg.publicKey.startsWith("TEST-") || cfg.publicKey.startsWith("PK_TEST-"))
+          ? "test"
+          : (cfg.publicKey.startsWith("APP_USR-") || cfg.publicKey.startsWith("PK_PROD-"))
+            ? "production"
+            : null;
+        if (pkEnv && pkEnv !== env) {
+          isEnvMismatch = true;
+        }
       }
+    } catch {
+      mpConnected = false;
     }
-  } catch {
-    return { configured: false as const };
   }
+
   return {
     configured: true as const,
+    mpConnected,
     masked,
     env,
     pkEnv,
@@ -63,8 +70,60 @@ export async function getPaymentConfigStatus(weddingSlug: string) {
     passCardFeeToGuest: cfg.passCardFeeToGuest,
     cardFeePercent: cfg.cardFeePercent,
     enabled: cfg.enabled,
+    directPixKey: cfg.directPixKey || null,
+    directPixKeyType: cfg.directPixKeyType || "CPF",
+    directPixHolderName: cfg.directPixHolderName || null,
     updatedAt: cfg.updatedAt,
   };
+}
+
+/** Desconecta a conta Mercado Pago do casamento. */
+export async function disconnectMp(weddingSlug: string) {
+  await requirePermission(weddingSlug, "canEditWedding");
+  const wedding = await prisma.wedding.findUnique({ where: { slug: weddingSlug } });
+  if (!wedding) throw new Error("Casamento não encontrado");
+  await prisma.weddingPaymentConfig.update({
+    where: { weddingId: wedding.id },
+    data: {
+      accessTokenEncrypted: null,
+      publicKey: null,
+    },
+  });
+  revalidatePath(`/${weddingSlug}/presentes`);
+  return { ok: true };
+}
+
+/** Salva a Chave PIX Direta dos noivos (0% de taxa, pagamento direto sem intermediário). */
+export async function saveDirectPixConfig(weddingSlug: string, data: {
+  key: string;
+  type: string;
+  holderName?: string;
+}) {
+  await requirePermission(weddingSlug, "canEditWedding");
+  const wedding = await prisma.wedding.findUnique({ where: { slug: weddingSlug } });
+  if (!wedding) throw new Error("Casamento não encontrado");
+
+  const existing = await prisma.weddingPaymentConfig.findUnique({ where: { weddingId: wedding.id } });
+
+  await prisma.weddingPaymentConfig.upsert({
+    where: { weddingId: wedding.id },
+    create: {
+      weddingId: wedding.id,
+      accessTokenEncrypted: existing?.accessTokenEncrypted || null,
+      publicKey: existing?.publicKey || null,
+      directPixKey: data.key.trim() || null,
+      directPixKeyType: data.type || "CPF",
+      directPixHolderName: data.holderName?.trim() || null,
+      enabled: true,
+    },
+    update: {
+      directPixKey: data.key.trim() || null,
+      directPixKeyType: data.type || "CPF",
+      directPixHolderName: data.holderName?.trim() || null,
+    },
+  });
+  revalidatePath(`/${weddingSlug}/presentes`);
+  return { ok: true };
 }
 
 /** Gera a URL oficial do Mercado Pago para autorizar a conta dos noivos em 1-clique via OAuth2. */
@@ -98,10 +157,6 @@ export async function savePaymentConfig(weddingSlug: string, data: {
   const encrypted = tokenTrimmed
     ? encryptSecret(tokenTrimmed)
     : existing?.accessTokenEncrypted;
-  if (!encrypted) throw new Error("Informe o Access Token do Mercado Pago.");
-  if (tokenTrimmed && !/^(TEST-|APP_USR-)/.test(tokenTrimmed)) {
-    throw new Error("Access Token inválido — deve começar com TEST- ou APP_USR-.");
-  }
 
   const fee = data.cardFeePercent === undefined
     ? (existing?.cardFeePercent ?? 4.98)
@@ -139,7 +194,7 @@ export async function getPaymentPublicKey(weddingSlug: string) {
   const wedding = await prisma.wedding.findUnique({ where: { slug: weddingSlug } });
   if (!wedding) return { publicKey: null, env: null as "test" | "production" | null };
   const cfg = await prisma.weddingPaymentConfig.findUnique({ where: { weddingId: wedding.id } });
-  if (!cfg?.enabled || !cfg.publicKey) return { publicKey: null, env: null as "test" | "production" | null };
+  if (!cfg?.enabled || !cfg.publicKey || !cfg.accessTokenEncrypted) return { publicKey: null, env: null as "test" | "production" | null };
   let env: "test" | "production" | null = null;
   try {
     const raw = decryptSecret(cfg.accessTokenEncrypted);
@@ -159,24 +214,41 @@ export async function diagnosePaymentConfig(weddingSlug: string) {
   return diag;
 }
 
-/** O casamento aceita pagamento online? (para o site decidir entre MP e simulação) */
+/** O casamento aceita pagamento online? (para o site decidir entre MP, PIX direto e simulação) */
 export async function isPaymentConfigured(weddingSlug: string) {
   const wedding = await prisma.wedding.findUnique({ where: { slug: weddingSlug } });
   if (!wedding) return { configured: false as const };
   const cfg = await prisma.weddingPaymentConfig.findUnique({ where: { weddingId: wedding.id } });
   if (!cfg?.enabled) return { configured: false as const };
-  try {
-    decryptSecret(cfg.accessTokenEncrypted);
-  } catch {
-    return { configured: false as const };
+
+  let mpOk = false;
+  let env: "test" | "production" = "production";
+  if (cfg.accessTokenEncrypted) {
+    try {
+      const raw = decryptSecret(cfg.accessTokenEncrypted);
+      env = isTestToken(raw) ? "test" : "production";
+      mpOk = true;
+    } catch {
+      mpOk = false;
+    }
   }
-  const raw = decryptSecret(cfg.accessTokenEncrypted);
+
+  const directPixOk = !!cfg.directPixKey;
+  if (!mpOk && !directPixOk) return { configured: false as const };
+
   return {
     configured: true as const,
-    hasCard: !!cfg.publicKey,
+    hasMp: mpOk,
+    hasCard: mpOk && !!cfg.publicKey,
+    hasDirectPix: directPixOk,
+    directPix: directPixOk ? {
+      key: cfg.directPixKey!,
+      type: cfg.directPixKeyType || "CPF",
+      holderName: cfg.directPixHolderName || null,
+    } : null,
     passCardFeeToGuest: cfg.passCardFeeToGuest,
     cardFeePercent: cfg.cardFeePercent,
-    env: (isTestToken(raw) ? "test" : "production") as "test" | "production",
+    env,
   };
 }
 
