@@ -587,7 +587,7 @@ export default function GiftGrid({
                 disabled={complete}
                 onClick={() => openCheckout(gift)}
               >
-                {complete ? (awaiting ? "Em compra por alguém 💛" : "Completo 🎉") : "Presentear"}
+                {complete ? (awaiting ? "Em compra 💛" : "Completo 🎉") : "Presentear"}
               </Button>
             </CardFooter>
           </Card>
