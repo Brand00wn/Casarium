@@ -67,6 +67,19 @@ export async function getPaymentConfigStatus(weddingSlug: string) {
   };
 }
 
+/** Gera a URL oficial do Mercado Pago para autorizar a conta dos noivos em 1-clique via OAuth2. */
+export async function getMpConnectUrl(weddingSlug: string) {
+  await requirePermission(weddingSlug, "canEditWedding");
+  const clientId = process.env.NEXT_PUBLIC_MP_CLIENT_ID || process.env.MP_CLIENT_ID || process.env.MERCADOPAGO_CLIENT_ID;
+  if (!clientId) {
+    return { ok: false as const, error: "Integração do Mercado Pago não configurada no servidor (falta NEXT_PUBLIC_MP_CLIENT_ID no .env)." };
+  }
+  const siteUrl = await getSiteUrl();
+  const redirectUri = `${siteUrl}/api/auth/mercadopago/callback`;
+  const url = `https://auth.mercadopago.com/authorization?client_id=${clientId}&response_type=code&platform_id=mp&redirect_uri=${encodeURIComponent(redirectUri)}&state=${weddingSlug}`;
+  return { ok: true as const, url };
+}
+
 export async function savePaymentConfig(weddingSlug: string, data: {
   accessToken?: string;
   publicKey?: string;
