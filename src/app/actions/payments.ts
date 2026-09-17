@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/session";
 import { encryptSecret, decryptSecret } from "@/lib/payment-crypto";
-import { createMpPayment, getMpPayment, applyCardFee, diagnoseMpToken, isTestToken } from "@/lib/mercadopago";
+import { createMpPayment, getMpPayment, applyCardFee, diagnoseMpToken, isTestToken, readRecentMpErrors } from "@/lib/mercadopago";
 import { getSiteUrl } from "@/lib/site-url";
 
 const QUOTA_HOLD_MINUTES = 40;
@@ -246,6 +246,16 @@ async function createQuotaPaymentInner(weddingSlug: string, input: CheckoutInput
       installments: input.installments || 1,
       externalReference: transaction.id,
       notificationUrl: `${siteUrl}/api/webhooks/mercadopago`,
+      debugContext: {
+        wedding: weddingSlug,
+        amount: total,
+        payMethod: input.paymentMethod,
+        mpMethodId: input.paymentMethod === "PIX" ? "pix" : (input.cardPaymentMethodId || "master"),
+        installments: input.installments || 1,
+        hasCardToken: !!input.cardToken,
+        hasIdentification: !!input.cardIdentification?.number,
+        payerEmail: input.guestEmail.trim(),
+      },
     });
   } catch (e: any) {
     const rawMsg: string = e?.message || "Operadora recusou o pagamento.";
@@ -320,6 +330,14 @@ async function createQuotaPaymentInner(weddingSlug: string, input: CheckoutInput
     fee,
     detail: mp.statusDetail || mp.status,
   };
+}
+
+/** Últimos erros crus da API MP deste casamento (só p/ quem configura — diagnóstico). */
+export async function getRecentMpErrors(weddingSlug: string) {
+  await requirePermission(weddingSlug, "canEditWedding");
+  const wedding = await prisma.wedding.findUnique({ where: { slug: weddingSlug } });
+  if (!wedding) throw new Error("Casamento não encontrado");
+  return readRecentMpErrors().filter((e) => (e.context as any)?.wedding === weddingSlug);
 }
 
 /** Status público de uma transação (para o polling do PIX). */

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { CreditCard, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { getPaymentConfigStatus, savePaymentConfig, diagnosePaymentConfig } from "@/app/actions/payments";
+import { getPaymentConfigStatus, savePaymentConfig, diagnosePaymentConfig, getRecentMpErrors } from "@/app/actions/payments";
 
 /** Configuração do Mercado Pago do casamento (noivos/cerimonialista com permissão). */
 export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
@@ -21,6 +21,8 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
   const [enabled, setEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [mpErrors, setMpErrors] = useState<any[] | null>(null);
+  const [loadingErrors, setLoadingErrors] = useState(false);
 
   const typedKeyEnv = publicKey.trim().startsWith("TEST-")
     ? "test"
@@ -167,6 +169,42 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
             {testing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
             Testar conexão
           </Button>
+        )}
+        {status?.configured && (
+          <Button
+            variant="ghost"
+            disabled={loadingErrors}
+            onClick={async () => {
+              setLoadingErrors(true);
+              try {
+                setMpErrors(await getRecentMpErrors(weddingSlug));
+              } catch (e: any) {
+                toast.error(e.message || "Erro ao buscar.");
+              } finally {
+                setLoadingErrors(false);
+              }
+            }}
+          >
+            {loadingErrors ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+            Ver erros recentes do MP
+          </Button>
+        )}
+        {mpErrors && (
+          <div className="rounded-lg border bg-muted/50 p-3 space-y-2 max-h-64 overflow-y-auto">
+            {mpErrors.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Nenhum erro da API MP registrado desde o último deploy. Reproduza o pagamento e clique de novo.</p>
+            ) : (
+              mpErrors.map((e, i) => (
+                <div key={i} className="text-xs space-y-1 border-b pb-2 last:border-0">
+                  <p className="font-mono font-bold">{e.at} — HTTP {e.httpStatus} {e.path}</p>
+                  {e.context && (
+                    <p className="font-mono break-all text-muted-foreground">ctx: {JSON.stringify(e.context)}</p>
+                  )}
+                  <p className="font-mono break-all">{e.snippet}</p>
+                </div>
+              ))
+            )}
+          </div>
         )}
       </CardContent>
     </Card>

@@ -11,6 +11,8 @@ export type MpPaymentInput = {
   installments?: number;
   externalReference: string; // nosso transactionId
   notificationUrl?: string;
+  /** Só p/ diagnóstico — nunca é enviado ao MP. */
+  debugContext?: Record<string, unknown>;
 };
 
 export function isTestToken(accessToken: string): boolean {
@@ -33,7 +35,24 @@ export type MpPayment = {
   };
 };
 
-async function mpFetch(accessToken: string, path: string, init?: RequestInit, opts?: { idempotent?: boolean }) {
+export type MpErrorEntry = {
+  at: string;
+  path: string;
+  httpStatus: number;
+  /** JSON cru do MP (sem token) p/ diagnóstico no painel. */
+  snippet: string;
+  /** Contexto do nosso lado (valor, bandeira, parcelas, pagador...). */
+  context?: Record<string, unknown>;
+};
+
+/** Ring buffer em memória dos últimos erros da API MP (cap 30). */
+const recentMpErrors: MpErrorEntry[] = [];
+
+export function readRecentMpErrors(): MpErrorEntry[] {
+  return [...recentMpErrors].reverse();
+}
+
+async function mpFetch(accessToken: string, path: string, init?: RequestInit, opts?: { idempotent?: boolean; context?: Record<string, unknown> }) {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Authorization: `Bearer ${accessToken}`,
@@ -48,10 +67,20 @@ async function mpFetch(accessToken: string, path: string, init?: RequestInit, op
   if (!res.ok) {
     // Log completo no servidor (aparece no Railway/Vercel) — essencial p/ diagnóstico.
     console.error("[MP API] Erro", res.status, path, JSON.stringify(data).slice(0, 2000));
+    try {
+      recentMpErrors.push({
+        at: new Date().toISOString(),
+        path,
+        httpStatus: res.status,
+        snippet: JSON.stringify(data).slice(0, 2000),
+        ...(opts?.context ? { context: opts.context } : {}),
+      });
+      if (recentMpErrors.length > 30) recentMpErrors.splice(0, recentMpErrors.length - 30);
+    } catch { /* diagnóstico nunca pode quebrar o pagamento */ }
     const causes = Array.isArray(data?.cause)
       ? data.cause.map((c: any) => [c?.code, c?.description].filter(Boolean).join(": ")).filter(Boolean).join(" | ")
       : "";
-    const raw = causes || data?.message || data?.error || `HTTP ${res.status}`;
+    const raw = `HTTP ${res.status} — ${causes || data?.message || data?.error || "erro desconhecido"}`;
     const friendly = translateMpError(raw);
     // Mostra o motivo amigável + detalhe técnico curto (não vaza o token).
     throw new Error(raw === friendly ? `Mercado Pago: ${raw}` : `Mercado Pago: ${friendly} (detalhe: ${raw.slice(0, 220)})`);
@@ -105,7 +134,7 @@ export async function createMpPayment(accessToken: string, input: MpPaymentInput
       external_reference: input.externalReference,
       ...(notificationUrl ? { notification_url: notificationUrl } : {}),
     }),
-  });
+  }, { context: input.debugContext });
 }
 
 export async function getMpPayment(accessToken: string, paymentId: string | number): Promise<MpPayment> {
