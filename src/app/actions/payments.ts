@@ -11,7 +11,7 @@ const QUOTA_HOLD_MINUTES = 40;
 
 async function getConfigOrThrow(weddingId: string) {
   const cfg = await prisma.weddingPaymentConfig.findUnique({ where: { weddingId } });
-  if (!cfg || !cfg.enabled) throw new Error("Pagamentos online ainda não foram configurados para este casamento.");
+  if (!cfg || !cfg.enabled || !cfg.accessTokenEncrypted) throw new Error("Pagamentos online ainda não foram configurados para este casamento.");
   let accessToken: string;
   try {
     accessToken = decryptSecret(cfg.accessTokenEncrypted);
