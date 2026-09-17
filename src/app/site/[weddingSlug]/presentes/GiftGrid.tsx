@@ -641,7 +641,7 @@ export default function GiftGrid({
                   {mpEnv === "test" && (
                     <div className="p-3 rounded-lg border border-amber-300 bg-amber-50 text-xs text-amber-900 space-y-1">
                       <p className="font-bold">🧪 Modo TESTE ativo</p>
-                      <p>Use e-mail <code className="font-mono">test@testuser.com</code>, nome <code className="font-mono">APRO</code>, CPF <code className="font-mono">12345678909</code>, cartão <code className="font-mono">4235 6477 2802 5682</code> (Visa) ou <code className="font-mono">5480 8328 0103 3311</code> (Master), validade 11/30, CVV 123, à vista (1x).</p>
+                      <p>Use e-mail <code className="font-mono">test@testuser.com</code>, nome <code className="font-mono">APRO</code>, CPF <code className="font-mono">12345678909</code>, cartão <code className="font-mono">4235 6477 2802 5682</code> (Visa) ou <code className="font-mono">5480 8328 0103 3311</code> (Master), validade 11/30, CVV 123, à vista (1x), valor de R$ 10+.</p>
                     </div>
                   )}
                   {cardFee.pass && cardFee.percent > 0 && selectedGift && (

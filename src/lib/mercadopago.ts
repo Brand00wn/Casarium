@@ -66,7 +66,7 @@ function translateMpError(raw: string): string {
   // cartão/bandeira não habilitada p/ a conta, BIN de teste errado, valor fora
   // da regra, ou credencial de teste usada com dados reais (e vice-versa).
   if (low.includes("excluded by a rule") || low.includes("excludes_by_rule") || low.includes("not_supported")) {
-    return "Pagamento recusado pela regra da conta/cartão (vale p/ 1x também). Em TESTE use e-mail test@testuser.com + nome APRO + CPF 12345678909 + cartão 4235 6477 2802 5682 ou 5480 8328 0103 3311; em PRODUÇÃO use cartão real, à vista (1x), Public Key e Token do MESMO app.";
+    return "Pagamento recusado pela regra da conta/cartão (vale p/ 1x também). Em TESTE: e-mail test@testuser.com + nome APRO + CPF 12345678909 + cartão 4235 6477 2802 5682 ou 5480 8328 0103 3311, valor de R$ 10+ (valor muito baixo cai na regra) e Access Token de TESTE da MESMA app (o atual começa com APP_USR-; se o seu é TEST- antigo, recopile em Suas integrações → app → Testes → Credenciais de teste); em PRODUÇÃO use cartão real, à vista (1x), Public Key e Token do MESMO app.";
   }
   if (low.includes("invalid_installments") || low.includes("invalid number of shares")) {
     return "Número de parcelas inválido para este cartão. Tente em menos vezes.";
