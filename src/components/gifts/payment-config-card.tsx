@@ -104,6 +104,25 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
     }
   };
 
+  const handleTogglePassFee = async (v: boolean) => {
+    // Salva o valor NOVO (v) direto — setPassFee é assíncrono, então ler
+    // `passFee` aqui pegaria o valor antigo e o switch voltaria sozinho.
+    const prev = passFee;
+    setPassFee(v);
+    try {
+      await savePaymentConfig(weddingSlug, {
+        passCardFeeToGuest: v,
+        cardFeePercent: Number(feePercent) || 0,
+        enabled,
+      });
+      toast.success(v ? "Taxa do cartão será repassada ao convidado." : "Taxa do cartão ficará com os noivos.");
+      loadStatus();
+    } catch (e: any) {
+      setPassFee(prev);
+      toast.error(e.message || "Erro ao salvar.");
+    }
+  };
+
   const handleSaveManual = async () => {
     setSavingManual(true);
     try {
@@ -206,7 +225,7 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3 pt-2 border-t border-border/60">
               <div className="flex items-center justify-between gap-3">
                 <Label htmlFor="pass-fee" className="text-xs cursor-pointer">Repassar taxa do cartão ({feePercent}%) ao convidado</Label>
-                <Switch id="pass-fee" checked={passFee} onCheckedChange={(v) => { setPassFee(v); handleSaveManual(); }} />
+                <Switch id="pass-fee" checked={passFee} onCheckedChange={handleTogglePassFee} />
               </div>
             </div>
           )}
