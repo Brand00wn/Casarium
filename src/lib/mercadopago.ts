@@ -103,6 +103,9 @@ function translateMpError(raw: string): string {
   if (low.includes("invalid_users_involved") || low.includes("2034") || (low.includes("payer") && low.includes("collector"))) {
     return "O e-mail do comprador é o mesmo da conta que recebe (erro 2034). O Mercado Pago bloqueia pagar para si mesmo: teste com um e-mail DIFERENTE do e-mail da conta dos noivos. Em produção, nunca use o e-mail do vendedor no checkout.";
   }
+  if (low.includes("4390") || low.includes("payer email forbidden")) {
+    return "E-mail do pagador não permitido para este vendedor (erro 4390). Crie também uma conta de TESTE do tipo Vendedor em Contas de Teste no painel do Mercado Pago e use o Access Token de TESTE dela, ou use o e-mail da conta de TESTE Comprador correspondente.";
+  }
   if (low.includes("inactive user") || low.includes("unauthorized")) {
     return "Conta de recebimento ainda não habilitada. Complete o cadastro no Mercado Pago.";
   }
