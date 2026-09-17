@@ -78,7 +78,7 @@ export async function GET(req: Request) {
         weddingId: wedding.id,
         accessTokenEncrypted,
         publicKey,
-        passCardFeeToGuest: false,
+        passCardFeeToGuest: true,
         cardFeePercent: 4.98,
         enabled: true,
       },

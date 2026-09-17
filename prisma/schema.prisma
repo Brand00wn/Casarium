@@ -147,8 +147,8 @@ model WeddingPaymentConfig {
   provider             String   @default("MERCADOPAGO")
   accessTokenEncrypted String?  @db.Text
   publicKey            String?
-  // Quem absorve a taxa do cartão? false = noivos absorvem (default), true = repassa ao convidado
-  passCardFeeToGuest   Boolean  @default(false)
+  // Quem absorve a taxa do cartão? true = repassa ao convidado (default), false = noivos absorvem
+  passCardFeeToGuest   Boolean  @default(true)
   cardFeePercent       Float    @default(4.98)
   pixFeePercent        Float    @default(0.99)
   // Taxa real aprendida das vendas aprovadas no cartão à vista (1x): média

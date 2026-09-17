@@ -200,7 +200,7 @@ export async function savePaymentConfig(weddingSlug: string, data: {
       weddingId: wedding.id,
       accessTokenEncrypted: encrypted,
       publicKey: newPublicKey,
-      passCardFeeToGuest: data.passCardFeeToGuest ?? existing?.passCardFeeToGuest ?? false,
+      passCardFeeToGuest: data.passCardFeeToGuest ?? existing?.passCardFeeToGuest ?? true,
       cardFeePercent: fee,
       enabled: data.enabled ?? existing?.enabled ?? true,
     },
