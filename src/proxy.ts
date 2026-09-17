@@ -16,12 +16,13 @@ export default auth((req) => {
   const isApiAuthRoute = pathname.startsWith('/api/auth')
   const isNextStatic = pathname.startsWith('/_next') || pathname.startsWith('/favicon.ico')
   // Rotas públicas: autenticação + site público do casamento (RSVP, presentes, mural)
-  // (auto-cadastro /register desativado — contas criadas pela equipe)
   const isPublicRoute =
     pathname.startsWith('/login') ||
+    pathname.startsWith('/register') ||
     pathname.startsWith('/forgot-password') ||
     pathname.startsWith('/reset-password') ||
-    pathname.startsWith('/site')
+    pathname.startsWith('/site') ||
+    pathname.startsWith('/api/webhooks')
 
   if (isNextStatic || isApiAuthRoute) {
     return
