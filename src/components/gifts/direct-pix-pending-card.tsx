@@ -4,12 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Hourglass, Loader2, RefreshCw, Check, X } from "lucide-react";
+import { Hourglass, Loader2, RefreshCw, Check, X, History } from "lucide-react";
 import { toast } from "sonner";
 import {
   getDirectPixPending,
+  getDirectPixFailed,
   confirmDirectPixPayment,
   rejectDirectPixPayment,
+  reopenDirectPixPayment,
 } from "@/app/actions/payments";
 
 type PendingTx = {
@@ -27,15 +29,20 @@ type PendingTx = {
 const brl = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
-/** PIX direto aguardando confirmação dos noivos. Só aparece havendo pendências. */
+/** PIX direto aguardando confirmação dos noivos + expirados restauráveis. */
 export function DirectPixPendingCard({ weddingSlug }: { weddingSlug: string }) {
   const [items, setItems] = useState<PendingTx[] | null>(null);
+  const [failed, setFailed] = useState<PendingTx[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async (silent = false) => {
     try {
-      const list = await getDirectPixPending(weddingSlug);
+      const [list, failedList] = await Promise.all([
+        getDirectPixPending(weddingSlug),
+        getDirectPixFailed(weddingSlug),
+      ]);
       setItems(list as PendingTx[]);
+      setFailed(failedList as PendingTx[]);
     } catch (e: any) {
       if (!silent) toast.error(e.message || "Erro ao buscar pendências.");
     }
@@ -47,7 +54,7 @@ export function DirectPixPendingCard({ weddingSlug }: { weddingSlug: string }) {
     return () => clearInterval(t);
   }, [load]);
 
-  if (!items || items.length === 0) return null;
+  if ((!items || items.length === 0) && (!failed || failed.length === 0)) return null;
 
   const act = async (id: string, fn: (s: string, t: string) => Promise<unknown>, okMsg: string) => {
     setBusyId(id);
@@ -68,7 +75,7 @@ export function DirectPixPendingCard({ weddingSlug }: { weddingSlug: string }) {
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-base">
             <Hourglass className="w-5 h-5 text-amber-600" />
-            PIX Direto a Confirmar ({items.length})
+            PIX Direto a Confirmar ({items?.length || 0})
           </CardTitle>
           <Button type="button" variant="ghost" size="sm" onClick={() => load()} className="text-xs">
             <RefreshCw className="w-3.5 h-3.5 mr-1" /> Atualizar
@@ -79,7 +86,7 @@ export function DirectPixPendingCard({ weddingSlug }: { weddingSlug: string }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        {items.map((t) => (
+        {(items || []).map((t) => (
           <div key={t.id} className="flex flex-wrap items-center justify-between gap-3 bg-background p-3.5 rounded-xl border border-border/70">
             <div className="text-xs space-y-1 min-w-0">
               <p className="font-semibold text-sm truncate">
@@ -128,6 +135,38 @@ export function DirectPixPendingCard({ weddingSlug }: { weddingSlug: string }) {
             </div>
           </div>
         ))}
+        {(failed?.length || 0) > 0 && (
+          <div className="pt-2 space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+              <History className="w-3.5 h-3.5" /> Expirados/rejeitados (7 dias) — restaure se o convidado pagou
+            </p>
+            {(failed || []).map((t) => (
+              <div key={t.id} className="flex flex-wrap items-center justify-between gap-3 bg-muted/50 p-3 rounded-xl border border-border/60">
+                <div className="text-xs space-y-0.5 min-w-0">
+                  <p className="font-semibold text-sm truncate">
+                    {t.guestName} · {brl(t.amount)}
+                    {t.quantity > 1 ? <span className="text-muted-foreground"> ({t.quantity} cotas)</span> : null}
+                  </p>
+                  <p className="text-muted-foreground truncate">
+                    {t.gift?.name || "Presente"} · {new Date(t.createdAt).toLocaleString("pt-BR")}
+                    {t.claimedAt ? " · disse que pagou ✓" : ""}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => act(t.id, reopenDirectPixPayment, "Reserva restaurada por 24h.")}
+                  disabled={busyId === t.id}
+                  className="rounded-full text-xs"
+                >
+                  {busyId === t.id ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <History className="w-3.5 h-3.5 mr-1" />}
+                  Restaurar
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

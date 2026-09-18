@@ -8,6 +8,7 @@ import { createMpPayment, getMpPayment, applyCardFee, diagnoseMpToken, isTestTok
 import type { MpPayment } from "@/lib/mercadopago";
 import { buildPixPayload } from "@/lib/pix-brcode";
 import QRCode from "qrcode";
+import { resend } from "@/lib/resend";
 import { getSiteUrl } from "@/lib/site-url";
 
 const QUOTA_HOLD_MINUTES = 40;
@@ -672,21 +673,83 @@ async function createDirectPixPaymentInner(weddingSlug: string, input: DirectPix
   };
 }
 
-/** Convidado clicou "Já paguei" — carimba o aviso (segue PENDING até os noivos confirmarem). */
+/** Reserva do "já paguei": quanto tempo os noivos têm para confirmar
+ *  antes da cota voltar a ficar disponível. */
+const CLAIM_HOLD_HOURS = 72;
+
+/** Convidado clicou "Já paguei" — carimba o aviso, estende a reserva e
+ *  avisa os noivos por e-mail (eles nem sempre estão com o app aberto). */
 export async function claimDirectPixPayment(transactionId: string) {
   try {
-    const tx = await prisma.transaction.findUnique({ where: { id: transactionId } });
+    const tx = await prisma.transaction.findUnique({
+      where: { id: transactionId },
+      include: {
+        gift: { select: { name: true } },
+        wedding: { select: { id: true, slug: true, partner1Name: true, partner2Name: true } },
+      },
+    });
     if (!tx || !tx.pixTxId || tx.status !== "PENDING") {
       return { ok: false as const, error: "Pagamento não encontrado." };
     }
     if (!tx.claimedAt) {
-      await prisma.transaction.update({ where: { id: tx.id }, data: { claimedAt: new Date() } });
+      await prisma.transaction.update({
+        where: { id: tx.id },
+        data: { claimedAt: new Date(), expiresAt: new Date(Date.now() + CLAIM_HOLD_HOURS * 3600_000) },
+      });
+      // E-mail nunca pode quebrar o "já paguei" (nem duplicar no duplo-clique).
+      notifyCouplePixClaimed({
+        weddingId: tx.wedding.id,
+        weddingSlug: tx.wedding.slug,
+        partner1Name: tx.wedding.partner1Name,
+        partner2Name: tx.wedding.partner2Name,
+        guestName: tx.guestName,
+        giftName: tx.gift?.name || "Presente",
+        amount: tx.amount,
+        quantity: tx.quantity,
+        guestMessage: tx.guestMessage,
+      }).catch((e) => console.error("[claimEmail]", e?.message || e));
     }
     return { ok: true as const };
   } catch (e: any) {
     console.error("[claimDirectPixPayment]", e?.message || e);
     return { ok: false as const, error: "Erro ao avisar os noivos." };
   }
+}
+
+/** E-mail p/ os noivos (OWNERs) pedindo confirmação do PIX direto. */
+async function notifyCouplePixClaimed(data: {
+  weddingId: string;
+  weddingSlug: string;
+  partner1Name: string;
+  partner2Name: string;
+  guestName: string;
+  giftName: string;
+  amount: number;
+  quantity: number;
+  guestMessage: string | null;
+}) {
+  if (!process.env.RESEND_API_KEY) return;
+  const owners = await prisma.weddingMember.findMany({
+    where: { weddingId: data.weddingId, role: "OWNER" },
+    include: { user: { select: { email: true } } },
+  });
+  const to = [...new Set(owners.map((o) => o.user.email).filter((e): e is string => !!e))];
+  if (to.length === 0) return;
+  const siteUrl = await getSiteUrl();
+  const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(data.amount);
+  const link = `${siteUrl}/${data.weddingSlug}/presentes`;
+  await resend.emails.send({
+    from: "Casarium <onboarding@resend.dev>",
+    to,
+    subject: `🎁 ${data.guestName} pagou ${data.giftName} (${brl}) — confirme o presente`,
+    html: [
+      `<p>Olá, ${data.partner1Name} & ${data.partner2Name}! 💛</p>`,
+      `<p><strong>${data.guestName}</strong> disse que pagou o PIX direto de <strong>${data.giftName}</strong> (${brl}${data.quantity > 1 ? ` · ${data.quantity} cotas` : ""}).</p>`,
+      data.guestMessage ? `<p>Mensagem: <em>“${data.guestMessage}”</em></p>` : "",
+      `<p>Confira no extrato do banco e <a href="${link}">confirme aqui na Gestão de Presentes</a> — a cota fica reservada por ${CLAIM_HOLD_HOURS}h.</p>`,
+      `<p><a href="${link}" style="display:inline-block;padding:10px 20px;background:#111;color:#fff;border-radius:999px;text-decoration:none;">Confirmar presente</a></p>`,
+    ].join(""),
+  });
 }
 
 /** PIX direto aguardando confirmação dos noivos (só p/ quem configura). */
@@ -745,6 +808,49 @@ export async function rejectDirectPixPayment(weddingSlug: string, transactionId:
   return { ok: true as const };
 }
 
+/** PIX direto expirado/rejeitado recentemente (p/ restaurar se perderam o timing). */
+export async function getDirectPixFailed(weddingSlug: string) {
+  await requirePermission(weddingSlug, "canEditWedding");
+  const wedding = await prisma.wedding.findUnique({ where: { slug: weddingSlug } });
+  if (!wedding) throw new Error("Casamento não encontrado");
+  return prisma.transaction.findMany({
+    where: {
+      weddingId: wedding.id,
+      status: "FAILED",
+      pixTxId: { not: null },
+      updatedAt: { gt: new Date(Date.now() - 7 * 24 * 3600_000) },
+    },
+    include: { gift: { select: { name: true } } },
+    orderBy: { updatedAt: "desc" },
+    take: 20,
+  });
+}
+
+/** Restaura um PIX direto expirado/rejeitado: volta a PENDING com +24h de
+ *  reserva (mantém o "já paguei" se havia). Passa pela trava de cota. */
+export async function reopenDirectPixPayment(weddingSlug: string, transactionId: string) {
+  await requirePermission(weddingSlug, "canEditWedding");
+  const wedding = await prisma.wedding.findUnique({ where: { slug: weddingSlug } });
+  if (!wedding) throw new Error("Casamento não encontrado");
+  const tx = await prisma.transaction.findFirst({
+    where: { id: transactionId, weddingId: wedding.id, pixTxId: { not: null } },
+  });
+  if (!tx) throw new Error("Pagamento não encontrado.");
+  if (tx.status !== "FAILED") throw new Error("Só dá para restaurar pagamento expirado/rejeitado.");
+  if (tx.giftId) {
+    const gift = await prisma.gift.findUnique({ where: { id: tx.giftId } });
+    if (gift && gift.quotaCount - (await occupiedQuota(gift.id)) < tx.quantity) {
+      throw new Error("Sem cota livre para restaurar — outra pessoa já ocupou.");
+    }
+  }
+  await prisma.transaction.update({
+    where: { id: tx.id },
+    data: { status: "PENDING", expiresAt: new Date(Date.now() + 24 * 3600_000) },
+  });
+  revalidatePath(`/site/${weddingSlug}/presentes`);
+  return { ok: true as const };
+}
+
 /** Últimos erros crus da API MP deste casamento (só p/ quem configura — diagnóstico). */
 export async function getRecentMpErrors(weddingSlug: string) {
   await requirePermission(weddingSlug, "canEditWedding");
@@ -792,11 +898,11 @@ export async function confirmMpPayment(weddingId: string, mpPaymentId: string | 
   return { ok: true as const, status: tx.status };
 }
 
-/** Expira reservas PIX vencidas (chamado pelo cron diário + após cada checkout).
- *  Reivindicados ("já paguei") não expiram sozinhos: aguardam os noivos. */
+/** Expira reservas vencidas (cron diário + após cada checkout). Reivindicado
+ *  tem prazo próprio (72h a partir do "já paguei") e também expira. */
 export async function expireStalePayments() {
   const res = await prisma.transaction.updateMany({
-    where: { status: "PENDING", claimedAt: null, expiresAt: { lt: new Date() } },
+    where: { status: "PENDING", expiresAt: { lt: new Date() } },
     data: { status: "FAILED" },
   });
   return { expired: res.count };

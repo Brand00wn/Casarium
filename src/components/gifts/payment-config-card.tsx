@@ -239,7 +239,7 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-amber-500 fill-amber-500" />
-              <h3 className="font-semibold text-sm">Mercado Pago (Cartão de Crédito + PIX Automático)</h3>
+              <h3 className="font-semibold text-sm">Mercado Pago (Cartão de Crédito)</h3>
             </div>
             {status?.mpConnected && (
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full">
@@ -249,7 +249,7 @@ export function PaymentConfigCard({ weddingSlug }: { weddingSlug: string }) {
           </div>
 
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Permite que os convidados presenteiem usando **Cartão de Crédito em até 12x** ou **PIX automático com confirmação na hora**. O dinheiro cai direto na conta dos noivos.
+            Permite que os convidados presenteiem usando **Cartão de Crédito** (à vista com repasse da taxa, ou em até 12x absorvendo a taxa). O dinheiro cai direto na conta dos noivos. O PIX é direto (seção abaixo), sem taxa.
           </p>
 
           {status?.mpConnected ? (
