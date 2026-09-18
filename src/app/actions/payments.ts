@@ -774,8 +774,9 @@ export async function confirmDirectPixPayment(weddingSlug: string, transactionId
   });
   if (!tx) throw new Error("Pagamento não encontrado.");
   if (tx.status !== "PENDING") throw new Error("Pagamento já resolvido.");
-  // Anti-over-sell: se outra pessoa confirmou a cota no meio do caminho,
-  // bloqueia e orienta o estorno em vez de vender 2x a mesma cota.
+  // Sem bloqueio: cotas são simbólicas — se outro convidado já completou,
+  // confirma como EXCEDENTE (o valor a mais é bem-vindo) e avisa na volta.
+  let overbooked = false;
   if (tx.giftId) {
     const gift = await prisma.gift.findUnique({ where: { id: tx.giftId } });
     if (gift) {
@@ -783,14 +784,12 @@ export async function confirmDirectPixPayment(weddingSlug: string, transactionId
         where: { giftId: tx.giftId, id: { not: tx.id }, status: "PAID" },
         _sum: { quantity: true },
       });
-      if ((paidOthers._sum.quantity || 0) + tx.quantity > gift.quotaCount) {
-        throw new Error("Esta cota já foi presenteada por outro convidado e confirmada. Rejeite este pagamento e combine o estorno com o convidado.");
-      }
+      overbooked = (paidOthers._sum.quantity || 0) + tx.quantity > gift.quotaCount;
     }
   }
   await prisma.transaction.update({ where: { id: tx.id }, data: { status: "PAID" } });
   revalidatePath(`/site/${weddingSlug}/presentes`);
-  return { ok: true as const };
+  return { ok: true as const, overbooked };
 }
 
 /** Noivos rejeitam (não caiu / expirado) — libera a cota. */
@@ -827,7 +826,8 @@ export async function getDirectPixFailed(weddingSlug: string) {
 }
 
 /** Restaura um PIX direto expirado/rejeitado: volta a PENDING com +24h de
- *  reserva (mantém o "já paguei" se havia). Passa pela trava de cota. */
+ *  reserva (mantém o "já paguei" se havia). Sem trava de cota — se exceder,
+ *  a confirmação avisa como excedente. */
 export async function reopenDirectPixPayment(weddingSlug: string, transactionId: string) {
   await requirePermission(weddingSlug, "canEditWedding");
   const wedding = await prisma.wedding.findUnique({ where: { slug: weddingSlug } });
@@ -837,12 +837,6 @@ export async function reopenDirectPixPayment(weddingSlug: string, transactionId:
   });
   if (!tx) throw new Error("Pagamento não encontrado.");
   if (tx.status !== "FAILED") throw new Error("Só dá para restaurar pagamento expirado/rejeitado.");
-  if (tx.giftId) {
-    const gift = await prisma.gift.findUnique({ where: { id: tx.giftId } });
-    if (gift && gift.quotaCount - (await occupiedQuota(gift.id)) < tx.quantity) {
-      throw new Error("Sem cota livre para restaurar — outra pessoa já ocupou.");
-    }
-  }
   await prisma.transaction.update({
     where: { id: tx.id },
     data: { status: "PENDING", expiresAt: new Date(Date.now() + 24 * 3600_000) },

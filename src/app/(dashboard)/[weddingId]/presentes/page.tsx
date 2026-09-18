@@ -503,12 +503,15 @@ export default function GiftsDashboardPage({ params }: { params: Promise<{ weddi
                       <TableCell>
                         {(() => {
                           const sold = Math.min(soldByGiftId[gift.id] || 0, gift.quotaCount);
+                          const raw = soldByGiftId[gift.id] || 0;
+                          const over = Math.max(0, raw - gift.quotaCount);
                           const buyers = buyersByGiftId[gift.id] || [];
                           const title = buyers.map(b => `${b.name}${b.quantity > 1 ? ` (${b.quantity} cotas)` : ""}`).join("\n");
                           if (gift.quotaCount > 1) {
                             return (
                               <span className="text-xs font-medium whitespace-nowrap" title={title || undefined}>
                                 {sold}/{gift.quotaCount} vendidas
+                                {over > 0 ? <span className="text-amber-700 font-semibold"> (+{over})</span> : null}
                               </span>
                             );
                           }

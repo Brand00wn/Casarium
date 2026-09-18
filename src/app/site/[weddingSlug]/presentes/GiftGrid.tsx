@@ -404,10 +404,12 @@ export default function GiftGrid({
         {visibleGifts.map((gift) => {
           const sold = soldOf(gift);
           const held = heldOf(gift);
+          const soldRaw = soldByGift[gift.id] || 0;
+          const over = Math.max(0, soldRaw - gift.quotaCount);
           const remaining = remainingOf(gift);
           const complete = remaining <= 0;
           const awaiting = complete && !paidCompleteOf(gift);
-          const pct = Math.round((sold / gift.quotaCount) * 100);
+          const pct = Math.min(100, Math.round((sold / gift.quotaCount) * 100));
           return (
           <Card key={gift.id} className="group overflow-hidden flex flex-col rounded-2xl border-border/70 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
             {gift.imageUrl ? (
@@ -447,7 +449,7 @@ export default function GiftGrid({
                         </span>
                       )
                     ) : (
-                      <>{sold} de {gift.quotaCount} cotas presenteadas{held > 0 ? ` · ${held} reservada${held > 1 ? "s" : ""}` : ""} · {brl(quotaValueOf(gift))} cada</>
+                      <>{sold} de {gift.quotaCount} cotas presenteadas{over > 0 ? ` · +${over} excedente` : ""}{held > 0 ? ` · ${held} reservada${held > 1 ? "s" : ""}` : ""} · {brl(quotaValueOf(gift))} cada</>
                     )}
                   </p>
                 </div>

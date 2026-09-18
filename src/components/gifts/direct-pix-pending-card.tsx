@@ -111,7 +111,22 @@ export function DirectPixPendingCard({ weddingSlug }: { weddingSlug: string }) {
               <Button
                 type="button"
                 size="sm"
-                onClick={() => act(t.id, confirmDirectPixPayment, "Presente confirmado! 🎉")}
+                onClick={async () => {
+                  setBusyId(t.id);
+                  try {
+                    const r = await confirmDirectPixPayment(weddingSlug, t.id);
+                    toast.success(
+                      r.overbooked
+                        ? "Confirmado como excedente (a cota já estava completa). 🎉"
+                        : "Presente confirmado! 🎉"
+                    );
+                    await load(true);
+                  } catch (e: any) {
+                    toast.error(e.message || "Erro.");
+                  } finally {
+                    setBusyId(null);
+                  }
+                }}
                 disabled={busyId === t.id}
                 className="rounded-full text-xs bg-emerald-600 hover:bg-emerald-700"
               >
