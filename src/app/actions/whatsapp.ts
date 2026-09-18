@@ -60,13 +60,13 @@ async function sendTextAndQr(guest: LoadedGuest, text: string, qrCaption: string
     return { ok: false, error: !guest.phone ? "Guest has no phone number" : "Guest has no invite code" };
   }
 
-  const textRes = await sendWhatsAppMessage(guest.phone, text);
+  const textRes = await sendWhatsAppMessage(guest.phone, text, { weddingId: guest.weddingId });
   if (!textRes.ok) return { ok: false, error: textRes.error };
 
   // QR de entrada: um por representante (titular). O QR carrega o token.
   if (guest.isPrimary) {
     const qrImage = await guestCodeQrDataUrl(guest.token);
-    const mediaRes = await sendWhatsAppImage(guest.phone, qrImage, qrCaption);
+    const mediaRes = await sendWhatsAppImage(guest.phone, qrImage, qrCaption, { weddingId: guest.weddingId });
     if (!mediaRes.ok) {
       return { ok: false, error: `Texto enviado, mas o QR falhou: ${mediaRes.error}` };
     }

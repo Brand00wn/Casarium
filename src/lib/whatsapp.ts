@@ -1,11 +1,58 @@
+import { prisma } from "@/lib/prisma";
+
 export type WhatsAppResult = { ok: true } | { ok: false, error: string };
 
-function getEvolutionConfig() {
+type EvolutionTarget = {
+  evolutionUrl: string;
+  evolutionKey: string;
+  evolutionInstance: string;
+  /** Nome de quem é o número (p/ diagnóstico). Null = instância global. */
+  ownerName: string | null;
+};
+
+function getGlobalConfig(): Omit<EvolutionTarget, "evolutionInstance" | "ownerName"> | null {
   const evolutionUrl = process.env.EVOLUTION_API_URL;
   const evolutionKey = process.env.EVOLUTION_API_KEY;
-  const evolutionInstance = process.env.EVOLUTION_INSTANCE_NAME;
-  if (!evolutionUrl || !evolutionKey || !evolutionInstance) return null;
-  return { evolutionUrl, evolutionKey, evolutionInstance };
+  if (!evolutionUrl || !evolutionKey) return null;
+  return { evolutionUrl, evolutionKey };
+}
+
+/** Cerimonial dono do casamento (1º membro PLANNER; senão null → global). */
+async function findPlannerForWedding(weddingId: string): Promise<{
+  id: string;
+  name: string | null;
+  waInstanceName: string | null;
+} | null> {
+  try {
+    const members = await prisma.weddingMember.findMany({
+      where: { weddingId },
+      include: { user: { select: { id: true, name: true, role: true, waInstanceName: true } } },
+    });
+    const byUserRole = members.find((m) => m.user.role === "PLANNER")?.user;
+    if (byUserRole) return byUserRole;
+    const byMemberRole = members.find((m) => m.role === "PLANNER")?.user;
+    return byMemberRole || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Resolve para qual instância enviar: a do cerimonial (se houver) ou a global. */
+async function resolveTarget(weddingId?: string): Promise<EvolutionTarget | null> {
+  const global = getGlobalConfig();
+  if (!global) return null;
+
+  if (weddingId) {
+    const planner = await findPlannerForWedding(weddingId);
+    const instance = planner?.waInstanceName?.trim();
+    if (planner && instance) {
+      return { ...global, evolutionInstance: instance, ownerName: planner.name };
+    }
+  }
+
+  const fallback = process.env.EVOLUTION_INSTANCE_NAME;
+  if (!fallback) return null;
+  return { ...global, evolutionInstance: fallback, ownerName: null };
 }
 
 function formatPhone(phone: string) {
@@ -18,21 +65,20 @@ function formatPhone(phone: string) {
   return digits;
 }
 
-async function postEvolution(path: string, body: Record<string, unknown>): Promise<WhatsAppResult> {
-  const config = getEvolutionConfig();
-  if (!config) {
-    return { ok: false, error: "Evolution API não configurada (EVOLUTION_API_URL/KEY/INSTANCE)." };
-  }
-
+async function postEvolution(
+  target: EvolutionTarget,
+  path: string,
+  body: Record<string, unknown>,
+): Promise<WhatsAppResult> {
   try {
-    const { evolutionUrl, evolutionKey, evolutionInstance } = config;
+    const { evolutionUrl, evolutionKey, evolutionInstance } = target;
     const response = await fetch(`${evolutionUrl}/message/${path}/${evolutionInstance}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "apikey": evolutionKey
+        "apikey": evolutionKey,
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
@@ -48,11 +94,33 @@ async function postEvolution(path: string, body: Record<string, unknown>): Promi
   }
 }
 
-export const sendWhatsAppMessage = async (phone: string, message: string): Promise<WhatsAppResult> => {
-  const config = getEvolutionConfig();
+export type SendOpts = { weddingId?: string };
+
+/** Envio direto por instância (teste de conexão, sem casamento). */
+export async function sendWhatsAppViaInstance(
+  instanceName: string,
+  phone: string,
+  message: string,
+): Promise<WhatsAppResult> {
+  const global = getGlobalConfig();
+  if (!global) {
+    return { ok: false, error: "Evolution não configurada no servidor (EVOLUTION_API_URL/KEY)." };
+  }
+  return postEvolution({ ...global, evolutionInstance: instanceName, ownerName: null }, "sendText", {
+    number: formatPhone(phone),
+    text: message,
+  });
+}
+
+export const sendWhatsAppMessage = async (
+  phone: string,
+  message: string,
+  opts?: SendOpts,
+): Promise<WhatsAppResult> => {
+  const target = await resolveTarget(opts?.weddingId);
 
   // Se não houver as chaves de API, usamos o Mock
-  if (!config) {
+  if (!target) {
     console.log(`[WhatsApp Mock] Simulando envio para ${phone}...`);
     console.log(`[WhatsApp Mock] Mensagem:\n${message}`);
     await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -60,7 +128,7 @@ export const sendWhatsAppMessage = async (phone: string, message: string): Promi
     return { ok: true };
   }
 
-  return postEvolution("sendText", {
+  return postEvolution(target, "sendText", {
     number: formatPhone(phone),
     text: message,
   });
@@ -70,20 +138,25 @@ export const sendWhatsAppMessage = async (phone: string, message: string): Promi
  * Envia imagem (ex: QR Code do convite) via Evolution API.
  * @param imageBase64 PNG em base64 (com ou sem prefixo data:image/png;base64,)
  */
-export const sendWhatsAppImage = async (phone: string, imageBase64: string, caption?: string): Promise<WhatsAppResult> => {
-  const config = getEvolutionConfig();
+export const sendWhatsAppImage = async (
+  phone: string,
+  imageBase64: string,
+  caption?: string,
+  opts?: SendOpts,
+): Promise<WhatsAppResult> => {
+  const target = await resolveTarget(opts?.weddingId);
 
   const media = imageBase64.replace(/^data:image\/\w+;base64,/, "");
 
   // Se não houver as chaves de API, usamos o Mock
-  if (!config) {
+  if (!target) {
     console.log(`[WhatsApp Mock] Simulando envio de IMAGEM para ${phone}...`);
     if (caption) console.log(`[WhatsApp Mock] Legenda:\n${caption}`);
     console.log(`[WhatsApp Mock] Imagem (${media.length} chars base64) enviada com sucesso para ${phone}!`);
     return { ok: true };
   }
 
-  return postEvolution("sendMedia", {
+  return postEvolution(target, "sendMedia", {
     number: formatPhone(phone),
     mediatype: "image",
     mimetype: "image/png",

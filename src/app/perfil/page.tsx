@@ -2,6 +2,7 @@ import { getCurrentUser } from "@/lib/session"
 import { redirect } from "next/navigation"
 import { ProfileForm } from "@/components/profile/profile-form"
 import { PasswordForm } from "@/components/profile/password-form"
+import { WhatsAppConnectionCard } from "@/components/profile/whatsapp-connection-card"
 
 export default async function PerfilPage() {
   const user = await getCurrentUser()
@@ -9,6 +10,8 @@ export default async function PerfilPage() {
   if (!user) {
     redirect("/login")
   }
+
+  const canConnectWhats = user.role === "PLANNER" || user.role === "ADMIN"
 
   return (
     <div className="max-w-4xl mx-auto flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out">
@@ -18,9 +21,11 @@ export default async function PerfilPage() {
           Gerencie suas informações pessoais e configurações de segurança.
         </p>
       </div>
-      
+
       <ProfileForm initialName={user.name || ""} email={user.email || ""} />
-      
+
+      {canConnectWhats && <WhatsAppConnectionCard />}
+
       <PasswordForm />
     </div>
   )

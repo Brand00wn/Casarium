@@ -26,6 +26,15 @@ model User {
   city        String?
   logoUrl     String?
 
+  // WhatsApp próprio do cerimonial (1 número p/ todos os casamentos dele).
+  // Servidor/chave seguem globais (EVOLUTION_API_URL/KEY); por cerimonial
+  // vai só a instância. Sem instância, usa a global EVOLUTION_INSTANCE_NAME.
+  waProvider          String    @default("EVOLUTION")
+  waInstanceName      String?
+  waPhone             String?
+  waStatus            String?
+  waStatusUpdatedAt   DateTime?
+
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
   accounts    Account[]
