@@ -2,7 +2,7 @@
 import { generateText, tool } from 'ai';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { getGoogleModel, toAiErrorMessage } from '@/lib/ai-model';
+import { generateObjectWithFallback, toAiErrorMessage } from '@/lib/ai-model';
 import { assignGuestToTable, unassignGuestFromTable } from '@/app/actions/tables';
 
 export async function POST(req: Request) {
@@ -34,10 +34,7 @@ REGRAS:
 4. REGRA CRÍTICA DE CAPACIDADE: NUNCA aloque mais pessoas em uma mesa do que a sua 'capacity'. Conte quantas pessoas já estão na mesa e quantas estão sendo movidas (incluindo dependentes). Se a capacidade for excedida, NÃO MOVA as pessoas excedentes e retorne uma mensagem de erro/alerta amigável no 'responseToUser' sugerindo alternativas, ou mova apenas a quantidade que couber.
 5. Você possui as coordenadas (x, y) de todas as mesas e dos elementos do salão. Use a matemática da distância euclidiana para deduzir posições de "mais perto", "mais longe" e realizar distribuições espaciais inteligentes quando o usuário solicitar!`;
 
-    const { generateObject } = await import('ai');
-
-    const result = await generateObject({
-      model: getGoogleModel(),
+    const result = await generateObjectWithFallback({
       system: systemPrompt,
       messages,
       schema: z.object({

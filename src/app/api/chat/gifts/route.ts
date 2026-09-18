@@ -1,9 +1,8 @@
 // @ts-nocheck
-import { generateObject } from "ai";
 import { z } from "zod";
 import * as cheerio from "cheerio";
 import { prisma } from "@/lib/prisma";
-import { getGoogleModel, toAiErrorMessage } from "@/lib/ai-model";
+import { generateObjectWithFallback, toAiErrorMessage } from "@/lib/ai-model";
 import { rehostImageToUploadthing } from "@/lib/uploadthing-manage";
 
 export async function POST(req: Request) {
@@ -28,8 +27,7 @@ export async function POST(req: Request) {
     });
     const categoriesString = categories.map(c => `'${c.id}' (${c.name})`).join(", ");
 
-    const result = await generateObject({
-      model: getGoogleModel(),
+    const result = await generateObjectWithFallback({
       system: `Você é um Concierge de Lista de Presentes experiente.
 Seu objetivo é ajudar os noivos a cadastrarem presentes na lista deles.
 Os noivos vão te mandar links de lojas (Mercado Livre, Amazon, Magalu, etc.).

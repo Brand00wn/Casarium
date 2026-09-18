@@ -1,7 +1,6 @@
-import { generateObject } from "ai";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { getGoogleModel, toAiErrorMessage } from "@/lib/ai-model";
+import { generateObjectWithFallback, toAiErrorMessage } from "@/lib/ai-model";
 import { syncPartyMemberToGuest } from "@/app/actions/party-guest-sync";
 
 export async function POST(req: Request) {
@@ -70,8 +69,7 @@ REGRAS:
 9. ATENÇÃO: Se a festa for no MESMO local da cerimônia, APENAS defina 'isSameLocation=true' e 'hasReception=true'. NÃO atualize 'receptionLocation'.
 10. Sempre responda de forma amigável e luxuosa em 'responseToUser', resumindo o que você alterou no sistema.`;
 
-    const result = await generateObject({
-      model: getGoogleModel(),
+    const result = await generateObjectWithFallback({
       system: systemPrompt,
       messages,
       schema: z.object({

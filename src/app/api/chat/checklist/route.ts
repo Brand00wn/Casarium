@@ -35,8 +35,7 @@ REGRAS E CAPACIDADES:
 5. STATUS aceitos: "TODO", "IN_PROGRESS", "DONE".
 6. PRIORIDADES aceitas: "LOW", "MEDIUM", "HIGH", "URGENT".`;
 
-    const result = await generateObject({
-      model: getGoogleModel(),
+    const result = await generateObjectWithFallback({
       system: systemPrompt,
       messages,
       schema: z.object({
