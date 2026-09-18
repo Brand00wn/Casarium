@@ -31,8 +31,8 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { UploadButton } from "@/lib/uploadthing";
 import { SafeImage } from "@/components/ui/safe-image";
+import { GiftImageUploader } from "@/components/gifts/gift-image-uploader";
 import { ImageAuditButton } from "./image-audit-button";
 import { PaymentConfigCard } from "@/components/gifts/payment-config-card";
 import { DirectPixPendingCard } from "@/components/gifts/direct-pix-pending-card";
@@ -249,63 +249,35 @@ export default function GiftsDashboardPage({ params }: { params: Promise<{ weddi
                   </div>
                   <div className="space-y-2">
                     <Label>Imagem do Presente</Label>
-                    {watch("imageUrl") ? (
-                      <div className="relative rounded-md overflow-hidden h-32 w-full border">
-                        <img src={watch("imageUrl")} alt="Preview" className="object-cover w-full h-full" />
-                        <Button
-                          variant="destructive"
-                          size="icon"
-                          className="absolute top-2 right-2 w-8 h-8"
-                          onClick={async () => {
-                            const current = watch("imageUrl");
-                            setValue("imageUrl", "");
-                            if (current) {
-                              try {
-                                await removeGiftImage(weddingId, editingGift?.id || null, current);
-                                toast.success("Imagem excluída.");
-                              } catch {
-                                toast.error("Não foi possível excluir o arquivo.");
-                              }
-                            }
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <UploadButton
-                          endpoint="imageUploader"
-                          onClientUploadComplete={async (res) => {
-                          const previous = watch("imageUrl");
-                          const next = res[0].url;
-                          setValue("imageUrl", next);
-                          // Substituição: apaga o arquivo antigo do UploadThing
-                          // (sem limpar o campo — o salvar grava a nova URL)
-                          if (previous && previous !== next) {
-                            try {
-                              await removeGiftImage(weddingId, editingGift?.id || null, previous, { clearField: false });
-                            } catch {
-                              console.error("Falha ao apagar imagem antiga");
-                            }
+                    <GiftImageUploader
+                      value={watch("imageUrl") || ""}
+                      onUpload={async (url) => {
+                        const previous = watch("imageUrl");
+                        setValue("imageUrl", url);
+                        // Substituição: apaga o arquivo antigo do UploadThing
+                        // (sem limpar o campo — o salvar grava a nova URL)
+                        if (previous && previous !== url) {
+                          try {
+                            await removeGiftImage(weddingId, editingGift?.id || null, previous, { clearField: false });
+                          } catch {
+                            console.error("Falha ao apagar imagem antiga");
                           }
-                          toast.success("Imagem enviada com sucesso!");
-                        }}
-                        onUploadError={(error: Error) => {
-                          toast.error(`Erro ao enviar: ${error.message}`);
-                        }}
-                      />
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground whitespace-nowrap">ou cole o link:</span>
-                          <Input
-                            placeholder="https://..."
-                            value={watch("imageUrl") || ""}
-                            onChange={(e) => setValue("imageUrl", e.target.value)}
-                            className="h-9 text-sm"
-                          />
-                        </div>
-                      </div>
-                    )}
+                        }
+                        toast.success("Imagem enviada com sucesso!");
+                      }}
+                      onRemove={async () => {
+                        const current = watch("imageUrl");
+                        setValue("imageUrl", "");
+                        if (current) {
+                          try {
+                            await removeGiftImage(weddingId, editingGift?.id || null, current);
+                            toast.success("Imagem excluída.");
+                          } catch {
+                            toast.error("Não foi possível excluir o arquivo.");
+                          }
+                        }
+                      }}
+                    />
                     <Input type="hidden" {...register("imageUrl")} />
                   </div>
                   <div className="grid gap-2">
