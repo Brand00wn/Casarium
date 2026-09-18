@@ -1,4 +1,4 @@
-import { google } from "@ai-sdk/google";
+import { google, createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import type { z } from "zod";
@@ -21,15 +21,31 @@ export function getGoogleModel() {
 
 type Provider = { name: string; make: () => any };
 
+/** Todas as chaves Google configuradas (principal + extras _2, _3, _4).
+ *  Cada chave tem cota própria — N chaves ≈ N× respiro, sem custo. */
+function googleKeys(): string[] {
+  const keys = [
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY_2,
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY_3,
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY_4,
+  ].filter((k): k is string => !!k && k.length > 10);
+  return [...new Set(keys)];
+}
+
 /** Cadeia de provedores (todos gratuitos): primário + fallbacks automáticos.
  *  Quando o Gemini estoura a cota (429), cai para o próximo sem o usuário
  *  perceber. Provedores sem chave configurada são pulados. */
 function buildProviderChain(): Provider[] {
   const chain: Provider[] = [];
 
-  if (process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-    chain.push({ name: `Google (${AI_MODEL_ID})`, make: () => google(AI_MODEL_ID) });
-  }
+  googleKeys().forEach((key, i) => {
+    const factory = createGoogleGenerativeAI({ apiKey: key });
+    chain.push({
+      name: `Google (${AI_MODEL_ID})${i > 0 ? ` chave ${i + 1}` : ""}`,
+      make: () => factory(AI_MODEL_ID),
+    });
+  });
 
   if (process.env.GROQ_API_KEY) {
     const groq = createOpenAI({ baseURL: "https://api.groq.com/openai/v1", apiKey: process.env.GROQ_API_KEY });
@@ -96,7 +112,7 @@ export async function generateObjectWithFallback<T>(opts: {
 
   throw new Error(
     `IA indisponível em todos os provedores (${errors.length} tentativas). ` +
-      `Cotas gratuitas esgotadas? Configure GROQ_API_KEY (grátis, sem cartão) e/ou OPENROUTER_API_KEY. Detalhes: ${errors.join(" | ").slice(0, 500)}`
+      `Cotas gratuitas esgotadas? Amplie com GROQ_API_KEY (grátis, sem cartão), GOOGLE_GENERATIVE_AI_API_KEY_2 e/ou OPENROUTER_API_KEY. Detalhes: ${errors.join(" | ").slice(0, 500)}`
   );
 }
 
@@ -107,7 +123,7 @@ export function toAiErrorMessage(error: unknown): string {
     return "Chave da IA inválida ou ausente. Verifique GOOGLE_GENERATIVE_AI_API_KEY no Railway/.env.";
   }
   if (/indisponível em todos os provedores/i.test(message)) {
-    return "IA temporariamente indisponível (cotas gratuitas esgotadas em todos os provedores). Tente de novo em alguns minutos — ou configure GROQ_API_KEY para ampliar a cota.";
+    return "IA temporariamente indisponível (cotas gratuitas esgotadas em todos os provedores). Tente de novo em alguns minutos — ou amplie a cota com GROQ_API_KEY ou GOOGLE_GENERATIVE_AI_API_KEY_2 (grátis).";
   }
   if (/model.*not.*found|404/i.test(message)) {
     return `Modelo de IA "${AI_MODEL_ID}" não encontrado na API do Google.`;

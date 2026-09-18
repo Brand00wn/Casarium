@@ -69,8 +69,11 @@ REGRAS:
 9. ATENÇÃO: Se a festa for no MESMO local da cerimônia, APENAS defina 'isSameLocation=true' e 'hasReception=true'. NÃO atualize 'receptionLocation'.
 10. Sempre responda de forma amigável e luxuosa em 'responseToUser', resumindo o que você alterou no sistema.`;
 
-    const result = await generateObjectWithFallback({
-      system: systemPrompt,
+    // IA fora nunca vira erro na tela: responde com charme e pede p/ repetir.
+    let result;
+    try {
+      result = await generateObjectWithFallback({
+        system: systemPrompt,
       messages,
       schema: z.object({
         operations: z.array(z.object({
@@ -139,6 +142,13 @@ REGRAS:
         responseToUser: z.string().describe("Mensagem super amigável em português, informando o que foi feito."),
       }),
     });
+    } catch (aiError) {
+      console.error("[wedding-details AI] resposta elegante sem IA:", aiError);
+      return Response.json({
+        text: "Hmm, minha conexão oscilou agora — pode mandar de novo? ✨",
+        toolResults: [],
+      });
+    }
 
     console.log(JSON.stringify(result.object, null, 2));
 

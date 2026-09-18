@@ -34,8 +34,11 @@ REGRAS:
 4. REGRA CRÍTICA DE CAPACIDADE: NUNCA aloque mais pessoas em uma mesa do que a sua 'capacity'. Conte quantas pessoas já estão na mesa e quantas estão sendo movidas (incluindo dependentes). Se a capacidade for excedida, NÃO MOVA as pessoas excedentes e retorne uma mensagem de erro/alerta amigável no 'responseToUser' sugerindo alternativas, ou mova apenas a quantidade que couber.
 5. Você possui as coordenadas (x, y) de todas as mesas e dos elementos do salão. Use a matemática da distância euclidiana para deduzir posições de "mais perto", "mais longe" e realizar distribuições espaciais inteligentes quando o usuário solicitar!`;
 
-    const result = await generateObjectWithFallback({
-      system: systemPrompt,
+    // IA fora nunca vira erro na tela: responde com charme e pede p/ repetir.
+    let result;
+    try {
+      result = await generateObjectWithFallback({
+        system: systemPrompt,
       messages,
       schema: z.object({
         moves: z.array(z.object({
@@ -44,8 +47,12 @@ REGRAS:
           moveEntireFamily: z.boolean().describe('Se true, move toda a família')
         })).describe('Lista de movimentações de convidados para mesas'),
         responseToUser: z.string().describe('Mensagem amigável de resposta ao usuário informando o que foi feito')
-      })
-    });
+        })
+      });
+      } catch (aiError) {
+        console.error('[tables AI] resposta elegante sem IA:', aiError);
+        return Response.json({ text: 'Hmm, minha conexão oscilou agora — pode repetir quem vai para qual mesa? ✨' });
+      }
 
     let successCount = 0;
     if (result.object.moves && result.object.moves.length > 0) {

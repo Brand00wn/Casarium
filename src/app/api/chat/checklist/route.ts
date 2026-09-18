@@ -35,8 +35,11 @@ REGRAS E CAPACIDADES:
 5. STATUS aceitos: "TODO", "IN_PROGRESS", "DONE".
 6. PRIORIDADES aceitas: "LOW", "MEDIUM", "HIGH", "URGENT".`;
 
-    const result = await generateObjectWithFallback({
-      system: systemPrompt,
+    // IA fora nunca vira erro na tela: responde com charme e pede p/ repetir.
+    let result;
+    try {
+      result = await generateObjectWithFallback({
+        system: systemPrompt,
       messages,
       schema: z.object({
         createCategories: z.array(z.object({
@@ -60,8 +63,12 @@ REGRAS E CAPACIDADES:
         })).optional().describe('Atualizações de tarefas existentes'),
         deleteTasks: z.array(z.string()).optional().describe('Lista de IDs de tarefas para deletar'),
         responseToUser: z.string().describe('Mensagem amigável explicando o que foi feito')
-      })
-    });
+        })
+      });
+      } catch (aiError) {
+        console.error('[checklist AI] resposta elegante sem IA:', aiError);
+        return Response.json({ text: 'Hmm, minha conexão oscilou agora — pode repetir o pedido? ✨' });
+      }
 
     const aiRes = result.object;
 
