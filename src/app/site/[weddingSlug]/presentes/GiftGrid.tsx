@@ -454,7 +454,9 @@ export default function GiftGrid({
                   </p>
                 </div>
               ) : (
-                <p className="text-xs font-medium text-muted-foreground">Cota única · valor total</p>
+                <p className="text-xs font-medium text-muted-foreground">
+                  Cota única · valor total{over > 0 ? <span className="text-amber-700 font-semibold"> · +{over} excedente</span> : null}
+                </p>
               )}
               <p className="text-2xl font-bold text-primary">
                 {brl(gift.price)}

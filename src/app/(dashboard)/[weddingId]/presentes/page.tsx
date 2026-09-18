@@ -516,10 +516,11 @@ export default function GiftsDashboardPage({ params }: { params: Promise<{ weddi
                             );
                           }
                           return sold > 0 ? (
-                            <span title={title || undefined}>
+                            <span title={title || undefined} className="inline-flex items-center gap-1">
                               <Badge className="bg-green-600 hover:bg-green-600 text-white whitespace-nowrap">
                                 Comprado ✓
                               </Badge>
+                              {over > 0 ? <span className="text-xs text-amber-700 font-semibold whitespace-nowrap">(+{over})</span> : null}
                             </span>
                           ) : (
                             <Badge variant="secondary" className="whitespace-nowrap">Disponível</Badge>
