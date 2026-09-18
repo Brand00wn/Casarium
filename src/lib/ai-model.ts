@@ -5,11 +5,10 @@ import type { z } from "zod";
 
 /**
  * Modelo Gemini padrão do Casarium (primário).
- * Centralizado aqui porque o nome do modelo já quebrou a IA uma vez
- * ("gemini-3.5-flash" não existe na API do Google).
- * Família válida na versão instalada do SDK: gemini-2.5 / gemini-2.0 / gemini-1.5.
+ * O Google aposenta gerações antigas sem aviso (2.5 e 2.0 retornam 404
+ * "no longer available") — se a IA cair com model-not-found, é aqui.
  */
-export const AI_MODEL_ID = "gemini-2.5-flash";
+export const AI_MODEL_ID = "gemini-3.6-flash";
 
 export function getGoogleModel() {
   if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
@@ -34,7 +33,8 @@ function buildProviderChain(): Provider[] {
 
   if (process.env.GROQ_API_KEY) {
     const groq = createOpenAI({ baseURL: "https://api.groq.com/openai/v1", apiKey: process.env.GROQ_API_KEY });
-    chain.push({ name: "Groq (llama-3.3-70b)", make: () => groq("llama-3.3-70b-versatile") });
+    const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+    chain.push({ name: `Groq (${model})`, make: () => groq(model) });
   }
 
   if (process.env.OPENROUTER_API_KEY) {
@@ -62,7 +62,9 @@ function buildProviderChain(): Provider[] {
 }
 
 /** generateObject com failover: tenta cada provedor em ordem até um responder.
- *  Drop-in para as rotas de chat (mesmos parâmetros que usavam antes). */
+ *  Drop-in para as rotas de chat (mesmos parâmetros que usavam antes).
+ *  Corta o histórico nas últimas 12 mensagens e limita a saída — o vai-e-vem
+ *  do chat multiplicava o gasto de tokens a cada turno. */
 export async function generateObjectWithFallback<T>(opts: {
   system?: string;
   messages: any;
@@ -70,14 +72,16 @@ export async function generateObjectWithFallback<T>(opts: {
 }): Promise<{ object: T }> {
   const chain = buildProviderChain();
   const errors: string[] = [];
+  const messages = Array.isArray(opts.messages) ? opts.messages.slice(-12) : opts.messages;
 
   for (const provider of chain) {
     try {
       const result = await generateObject({
         model: provider.make(),
         system: opts.system,
-        messages: opts.messages,
+        messages,
         schema: opts.schema as any,
+        maxOutputTokens: 2000,
       });
       if (provider.name !== chain[0]?.name) {
         console.warn(`[AI] Primário indisponível — respondido via ${provider.name}.`);

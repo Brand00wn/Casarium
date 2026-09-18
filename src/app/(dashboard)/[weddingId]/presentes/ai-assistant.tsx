@@ -87,7 +87,7 @@ export function AIGiftAssistant({ weddingSlug, onGiftAdded, onClose }: { wedding
           </div>
           <div className="flex flex-col items-start gap-0">
             <h3 className="font-semibold text-md text-foreground leading-none mb-1">IA Concierge</h3>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Gemini 2.5 Flash</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Gemini 3.6 Flash</p>
           </div>
         </div>
         {onClose && (
