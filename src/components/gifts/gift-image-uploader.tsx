@@ -5,6 +5,37 @@ import { Button } from "@/components/ui/button";
 import { ImagePlus, Loader2, Trash2, TriangleAlert } from "lucide-react";
 
 const MAX_BYTES = 4 * 1024 * 1024;
+const MAX_DIM = 1600;
+
+/** Normaliza a foto: se já é JPG/PNG/WEBP/GIF pequena, vai como está.
+ *  Se é grande ou num formato chato (ex.: HEIC de iPhone), reduz para
+ *  JPG 1600px no navegador. Lança Error com mensagem amigável se não der. */
+async function normalizeImage(file: File): Promise<File> {
+  const passthrough = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+  if (passthrough.includes(file.type) && file.size <= MAX_BYTES) return file;
+
+  const bitmap = await createImageBitmap(file).catch(() => null);
+  if (!bitmap) {
+    throw new Error("Formato não suportado pelo navegador (ex.: HEIC de iPhone). Converta para JPG e tente de novo.");
+  }
+  try {
+    const scale = Math.min(1, MAX_DIM / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * scale));
+    const h = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/jpeg", 0.82));
+    if (!blob) throw new Error("Não foi possível processar a imagem.");
+    if (blob.size > MAX_BYTES) throw new Error("Imagem grande demais mesmo comprimida. Use uma foto menor.");
+    return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+  } finally {
+    try { bitmap.close(); } catch { /* noop */ }
+  }
+}
 
 /** Anexo de imagem do presente: seleciona → envia → devolve a URL.
  *  Erro aparece escrito na tela (nunca spinner infinito). */
@@ -28,14 +59,17 @@ export function GiftImageUploader({
       setError("Envie uma imagem (JPG, PNG ou WEBP).");
       return;
     }
-    if (file.size > MAX_BYTES) {
-      setError("Imagem maior que 4MB. Comprima e tente de novo.");
+    let payload = file;
+    try {
+      payload = await normalizeImage(file);
+    } catch (e: any) {
+      setError(e?.message || "Não foi possível processar a imagem.");
       return;
     }
     setSending(true);
     try {
       const form = new FormData();
-      form.append("file", file);
+      form.append("file", payload);
       const res = await fetch("/api/gifts/upload", { method: "POST", body: form });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.url) {
@@ -110,7 +144,7 @@ export function GiftImageUploader({
           <TriangleAlert className="w-3.5 h-3.5 mt-0.5 shrink-0" /> {error}
         </p>
       ) : (
-        <p className="text-[11px] text-muted-foreground">JPG, PNG ou WEBP de até 4MB.</p>
+        <p className="text-[11px] text-muted-foreground">JPG, PNG ou WEBP de até 4MB (foto grande é comprimida sozinha).</p>
       )}
     </div>
   );
