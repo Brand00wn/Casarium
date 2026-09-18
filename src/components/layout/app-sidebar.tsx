@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/collapsible"
 import Link from "next/link"
 import { getCurrentUser } from "@/lib/session"
+import { isPaymentConfigured } from "@/app/actions/payments"
 import { signOut } from "@/lib/auth"
 import { SidebarCollapsibleItem } from "./sidebar-collapsible-item"
 
@@ -27,6 +28,20 @@ export async function AppSidebar({ weddingId, memberRole }: { weddingId: string,
   const user = await getCurrentUser();
   const { prisma } = await import("@/lib/prisma");
   const membershipsCount = user ? await prisma.weddingMember.count({ where: { userId: user.id } }) : 0;
+  // Menu de presentes segue o estado: sem recebimento, só Configuração
+  // (e o clique em Presentes abre ela); configurado, Gestão primeiro.
+  const giftsConfigured = await isPaymentConfigured(weddingId)
+    .then((c) => c.configured)
+    .catch(() => false);
+  const giftSubItems = giftsConfigured
+    ? [
+        { title: "Gestão", url: `/${weddingId}/presentes` },
+        { title: "Configuração", url: `/${weddingId}/presentes/recebimento` },
+        { title: "Categorias", url: `/${weddingId}/presentes/categorias` },
+      ]
+    : [
+        { title: "Configuração", url: `/${weddingId}/presentes/recebimento` },
+      ];
   const items = [
     {
       title: "Dashboard",
@@ -55,22 +70,9 @@ export async function AppSidebar({ weddingId, memberRole }: { weddingId: string,
     },
     {
       title: "Presentes",
-      url: `/${weddingId}/presentes/recebimento`,
+      url: giftSubItems[0].url,
       icon: Gift,
-      subItems: [
-        {
-          title: "Configuração",
-          url: `/${weddingId}/presentes/recebimento`,
-        },
-        {
-          title: "Gestão",
-          url: `/${weddingId}/presentes`,
-        },
-        {
-          title: "Categorias",
-          url: `/${weddingId}/presentes/categorias`,
-        }
-      ]
+      subItems: giftSubItems,
     },
     {
       title: "Álbum",
