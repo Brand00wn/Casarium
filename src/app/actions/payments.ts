@@ -306,6 +306,32 @@ export async function diagnosePaymentConfig(weddingSlug: string) {
   return diag;
 }
 
+/** Trava do "passo 1": sem recebimento configurado (MP ou PIX direto),
+ *  não cadastra nem edita presentes/categorias. Vale p/ UI e p/ actions. */
+export async function requireGiftsUnlocked(weddingSlug: string) {
+  const cfg = await isPaymentConfigured(weddingSlug);
+  if (!cfg.configured) {
+    throw new Error("Passo 1: configure o recebimento (Mercado Pago ou chave PIX) antes de cadastrar presentes.");
+  }
+  return cfg;
+}
+
+/** O site exibe a seção de presentes? Só com recebimento OK + ≥1 presente. */
+export async function isGiftListVisible(weddingSlug: string): Promise<boolean> {
+  try {
+    const cfg = await isPaymentConfigured(weddingSlug);
+    if (!cfg.configured) return false;
+    const wedding = await prisma.wedding.findUnique({
+      where: { slug: weddingSlug },
+      select: { id: true },
+    });
+    if (!wedding) return false;
+    return (await prisma.gift.count({ where: { weddingId: wedding.id } })) > 0;
+  } catch {
+    return false;
+  }
+}
+
 /** O casamento aceita pagamento online? (para o site decidir entre MP, PIX direto e simulação) */
 export async function isPaymentConfigured(weddingSlug: string) {
   const wedding = await prisma.wedding.findUnique({ where: { slug: weddingSlug } });

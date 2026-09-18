@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getSiteGuestBySlug } from "@/lib/site-guest";
 import { getGiftQuotaSold, getGiftQuotaHeld } from "@/app/actions/gifts";
+import { isGiftListVisible } from "@/app/actions/payments";
 import { notFound } from "next/navigation";
 import { PageHero, CoupleNames } from "@/components/site/site-ui";
 import GiftGrid from "./GiftGrid";
@@ -17,6 +18,11 @@ export default async function GiftsSitePage({
   });
 
   if (!wedding) {
+    notFound();
+  }
+
+  // Sem recebimento ou sem presentes, a lista não existe no site.
+  if (!(await isGiftListVisible(weddingSlug))) {
     notFound();
   }
 

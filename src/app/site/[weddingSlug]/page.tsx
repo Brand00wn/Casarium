@@ -3,6 +3,7 @@ import { notFound } from "next/navigation"
 import Link from "next/link"
 import { MapPin, Shirt, Gift, Clock, Navigation, BedDouble, Car, Sparkles, Scissors, Hotel, Store, Flower2, Gem, type LucideIcon } from "lucide-react"
 import { getMessages } from "@/app/actions/rsvp"
+import { isGiftListVisible } from "@/app/actions/payments"
 import { getSiteGuestBySlug } from "@/lib/site-guest"
 import { Countdown, Mural } from "./interactive"
 import { Eyebrow, Ornament } from "@/components/site/site-ui"
@@ -96,6 +97,7 @@ export default async function WeddingSitePage({ params }: { params: Promise<{ we
     orderBy: { createdAt: "desc" },
     take: 8,
   });
+  const showGifts = await isGiftListVisible(wedding.slug)
   const featuredGifts = [
     ...giftPreview.filter(g => g.imageUrl),
     ...giftPreview.filter(g => !g.imageUrl),
@@ -381,7 +383,8 @@ export default async function WeddingSitePage({ params }: { params: Promise<{ we
         </section>
       )}
 
-      {/* Presentes */}
+      {/* Presentes — só com recebimento configurado e lista montada */}
+      {showGifts && (
       <section className="mx-auto max-w-5xl px-4 py-20 text-center space-y-8">
         <div className="mx-auto w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
           <Gift className="w-6 h-6 text-primary" />
@@ -425,6 +428,7 @@ export default async function WeddingSitePage({ params }: { params: Promise<{ we
           Ver lista completa
         </Link>
       </section>
+      )}
 
       {/* Mural */}
       <section id="mural" className="bg-card border-t border-border/60">

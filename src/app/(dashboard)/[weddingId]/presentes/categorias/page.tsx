@@ -22,22 +22,33 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { 
-  getGiftCategories, 
-  createGiftCategory, 
-  updateGiftCategory, 
-  deleteGiftCategory 
+import {
+  getGiftCategories,
+  createGiftCategory,
+  updateGiftCategory,
+  deleteGiftCategory
 } from "@/app/actions/gift-categories";
+import { isPaymentConfigured } from "@/app/actions/payments";
+import { GiftSetupGate } from "@/components/gifts/gift-setup-gate";
 
 export default function GiftCategoriesPage({ params }: { params: Promise<{ weddingId: string }> }) {
   const { weddingId } = use(params);
   const [categories, setCategories] = useState<any[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<any | null>(null);
+  const [locked, setLocked] = useState<boolean | null>(null);
   
   const { register, handleSubmit, reset, setValue } = useForm();
 
   const loadData = async () => {
+    try {
+      const cfg = await isPaymentConfigured(weddingId);
+      setLocked(!cfg.configured);
+      if (!cfg.configured) return;
+    } catch {
+      setLocked(true);
+      return;
+    }
     const data = await getGiftCategories(weddingId);
     setCategories(data);
   };
@@ -92,6 +103,10 @@ export default function GiftCategoriesPage({ params }: { params: Promise<{ weddi
 
   return (
     <div className="flex flex-col gap-6 p-6 max-w-[1000px] mx-auto min-h-screen">
+      {locked === null ? null : locked ? (
+        <GiftSetupGate weddingSlug={weddingId} />
+      ) : (
+      <>
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Categorias de Presentes</h1>
         
@@ -161,6 +176,8 @@ export default function GiftCategoriesPage({ params }: { params: Promise<{ weddi
           </TableBody>
         </Table>
       </div>
+      </>
+      )}
     </div>
   );
 }

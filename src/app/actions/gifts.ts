@@ -5,8 +5,10 @@ import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/session";
 import { deleteUploadthingUrls } from "@/lib/uploadthing-manage";
 import { ensureDefaultCategories } from "./gift-categories";
+import { requireGiftsUnlocked } from "./payments";
 
 export async function createGift(weddingSlug: string, data: { name: string; description?: string; price: number; imageUrl?: string; quotaCount?: number; categoryIds?: string[] }) {
+  await requireGiftsUnlocked(weddingSlug);
   const gift = await prisma.gift.create({
     data: {
       wedding: { connect: { slug: weddingSlug } },
@@ -26,6 +28,12 @@ export async function createGift(weddingSlug: string, data: { name: string; desc
 }
 
 export async function updateGift(giftId: string, data: { name?: string; description?: string; price?: number; imageUrl?: string; quotaCount?: number; categoryIds?: string[] }) {
+  const existing = await prisma.gift.findUnique({
+    where: { id: giftId },
+    select: { wedding: { select: { slug: true } } },
+  });
+  if (!existing) throw new Error("Presente não encontrado");
+  await requireGiftsUnlocked(existing.wedding.slug);
   const updateData: any = {};
 
   if (data.name !== undefined) updateData.name = data.name;
@@ -135,6 +143,7 @@ export async function getGifts(weddingSlug: string) {
 }
 
 export async function seedDefaultGifts(weddingSlug: string) {
+  await requireGiftsUnlocked(weddingSlug);
   const wedding = await prisma.wedding.findUnique({
     where: { slug: weddingSlug },
   });

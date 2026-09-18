@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import { getSiteGuestBySlug } from "@/lib/site-guest"
+import { isGiftListVisible } from "@/app/actions/payments"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { SiteGuestBadge } from "./site-guest-badge"
@@ -22,10 +23,13 @@ export default async function SiteLayout({
   const siteGuest = await getSiteGuestBySlug(wedding.slug)
   const coupleShort = `${wedding.partner1Name.split(" ")[0]} & ${wedding.partner2Name.split(" ")[0]}`
 
+  // Sem recebimento configurado ou sem presentes, a lista some do site.
+  const showGifts = await isGiftListVisible(wedding.slug)
+
   const nav = [
     { href: `/site/${wedding.slug}`, label: "Início" },
     { href: `/site/${wedding.slug}/rsvp`, label: "Confirmar Presença" },
-    { href: `/site/${wedding.slug}/presentes`, label: "Lista de Presentes" },
+    ...(showGifts ? [{ href: `/site/${wedding.slug}/presentes`, label: "Lista de Presentes" }] : []),
   ]
 
   return (

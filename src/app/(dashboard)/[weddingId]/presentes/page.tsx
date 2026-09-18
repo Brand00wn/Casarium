@@ -34,8 +34,9 @@ import { Badge } from "@/components/ui/badge";
 import { SafeImage } from "@/components/ui/safe-image";
 import { GiftImageUploader } from "@/components/gifts/gift-image-uploader";
 import { ImageAuditButton } from "./image-audit-button";
-import { PaymentConfigCard } from "@/components/gifts/payment-config-card";
 import { DirectPixPendingCard } from "@/components/gifts/direct-pix-pending-card";
+import { GiftSetupGate } from "@/components/gifts/gift-setup-gate";
+import { isPaymentConfigured } from "@/app/actions/payments";
 import { AIGiftAssistant } from "./ai-assistant";
 
 export default function GiftsDashboardPage({ params }: { params: Promise<{ weddingId: string }> }) {
@@ -51,6 +52,7 @@ export default function GiftsDashboardPage({ params }: { params: Promise<{ weddi
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isPending, startTransition] = useTransition();
   const [savingGift, setSavingGift] = useState(false);
+  const [locked, setLocked] = useState<boolean | null>(null);
   
   const { register, handleSubmit, reset, setValue, watch } = useForm();
   
@@ -61,6 +63,14 @@ export default function GiftsDashboardPage({ params }: { params: Promise<{ weddi
   const quotaValue = (valQuotas > 0 && valPrice > 0) ? (valPrice / valQuotas) : valPrice;
 
   const loadData = async () => {
+    try {
+      const cfg = await isPaymentConfigured(weddingId);
+      setLocked(!cfg.configured);
+      if (!cfg.configured) return;
+    } catch {
+      setLocked(true);
+      return;
+    }
     const fetchedGifts = await getGifts(weddingId);
     const fetchedTransactions = await getTransactions(weddingId);
     const fetchedCategories = await getGiftCategories(weddingId);
@@ -210,7 +220,10 @@ export default function GiftsDashboardPage({ params }: { params: Promise<{ weddi
   return (
     <div className="flex flex-col lg:flex-row gap-6 p-6 max-w-[1400px] mx-auto min-h-screen items-start">
       <div className="flex-1 space-y-8 min-w-0 pb-10">
-        <PaymentConfigCard weddingSlug={weddingId} />
+        {locked === null ? null : locked ? (
+          <GiftSetupGate weddingSlug={weddingId} />
+        ) : (
+        <>
         <DirectPixPendingCard weddingSlug={weddingId} />
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold">Gestão de Presentes</h1>
@@ -515,6 +528,8 @@ export default function GiftsDashboardPage({ params }: { params: Promise<{ weddi
             </Table>
           </div>
         </div>
+        </>
+        )}
       </div>
       
       {/* Botão FAB */}

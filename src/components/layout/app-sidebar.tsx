@@ -55,9 +55,13 @@ export async function AppSidebar({ weddingId, memberRole }: { weddingId: string,
     },
     {
       title: "Presentes",
-      url: `/${weddingId}/presentes`,
+      url: `/${weddingId}/presentes/recebimento`,
       icon: Gift,
       subItems: [
+        {
+          title: "Recebimento (Passo 1)",
+          url: `/${weddingId}/presentes/recebimento`,
+        },
         {
           title: "Gestão",
           url: `/${weddingId}/presentes`,

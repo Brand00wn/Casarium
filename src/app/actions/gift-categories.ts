@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { requireGiftsUnlocked } from "./payments";
 
 const DEFAULT_CATEGORIES = [
   { name: "Cozinha", color: "#ef4444" },
@@ -52,6 +53,7 @@ export async function getGiftCategories(weddingSlug: string) {
 }
 
 export async function createGiftCategory(weddingSlug: string, data: { name: string; color?: string }) {
+  await requireGiftsUnlocked(weddingSlug);
   const wedding = await prisma.wedding.findUnique({
     where: { slug: weddingSlug },
   });
@@ -73,6 +75,12 @@ export async function createGiftCategory(weddingSlug: string, data: { name: stri
 }
 
 export async function updateGiftCategory(categoryId: string, data: { name: string; color?: string }) {
+  const current = await prisma.giftCategory.findUnique({
+    where: { id: categoryId },
+    include: { wedding: { select: { slug: true } } },
+  });
+  if (!current) throw new Error("Categoria não encontrada");
+  await requireGiftsUnlocked(current.wedding.slug);
   const category = await prisma.giftCategory.update({
     where: { id: categoryId },
     data: {
