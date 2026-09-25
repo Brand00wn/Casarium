@@ -179,6 +179,8 @@ export async function checkSlugAvailability(slug: string) {
   return { available: !existing, cleanSlug };
 }
 
+import { recalculateRelativeDates } from "@/app/actions/checklist"
+
 export async function updateWedding(weddingId: string, data: {
   partner1Name: string
   partner1Role: string
@@ -212,6 +214,8 @@ export async function updateWedding(weddingId: string, data: {
       }
     }
 
+    const dateChanged = currentWedding.date?.getTime() !== new Date(data.date).getTime();
+
     await prisma.wedding.update({
       where: { id: weddingId },
       data: {
@@ -224,11 +228,17 @@ export async function updateWedding(weddingId: string, data: {
       }
     });
 
+    if (dateChanged) {
+      await recalculateRelativeDates(weddingId);
+    }
+
     revalidatePath("/planner/weddings")
     revalidatePath("/admin/weddings")
     revalidatePath(`/${currentWedding.slug}/dashboard`)
+    revalidatePath(`/${currentWedding.slug}/checklist`)
     if (cleanSlug !== currentWedding.slug) {
       revalidatePath(`/${cleanSlug}/dashboard`)
+      revalidatePath(`/${cleanSlug}/checklist`)
     }
 
     return { success: true, slug: cleanSlug };

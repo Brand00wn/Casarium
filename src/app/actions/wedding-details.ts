@@ -207,7 +207,7 @@ export async function updateWeddingDetails(weddingId: string, data: any) {
     }
   }
 
-  if (oldWedding?.date && data.date && new Date(oldWedding.date).getTime() !== new Date(data.date).getTime()) {
+  if (oldWedding?.date && updated.date && oldWedding.date.getTime() !== updated.date.getTime()) {
     await recalculateRelativeDates(oldWedding.id)
   }
 
