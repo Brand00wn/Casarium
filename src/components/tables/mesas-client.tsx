@@ -17,7 +17,8 @@ import { ReactFlow, Background, applyNodeChanges, NodeChange, NodeTypes, Node, B
 import '@xyflow/react/dist/style.css'
 
 import { Button, buttonVariants } from "@/components/ui/button"
-import { Plus, Users, Settings2, GripVertical, Trash2, X, Sparkles, Send, Bot, Music, Martini, DoorOpen, Utensils, Box, Bath, User, Palette, Heart, Star, Wine, Camera, Gift, RotateCcw } from "lucide-react"
+import { Plus, Users, Settings2, GripVertical, Trash2, X, Sparkles, Send, Bot, Music, Martini, DoorOpen, Utensils, Box, Bath, User, Palette, Heart, Star, Wine, Camera, Gift, RotateCcw, WheatOff, Printer } from "lucide-react"
+import Link from "next/link"
 
 const VENUE_ICONS: Record<string, any> = {
   Box, Music, Martini, DoorOpen, Utensils, Bath, Heart, Star, Wine, Camera, Gift, Users
@@ -44,6 +45,18 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
+// Numeração automática das mesas (ordenada por nome A-Z, pt-BR).
+// Garante que cada mesa tenha um número estável para o buffet/impressão,
+// mesmo que o nome da mesa não contenha números.
+export function getTableNumberMap(tables: any[]): Map<string, number> {
+  const sorted = [...(tables || [])].sort((a, b) =>
+    String(a?.name ?? "").localeCompare(String(b?.name ?? ""), "pt-BR")
+  )
+  const map = new Map<string, number>()
+  sorted.forEach((t, idx) => map.set(t.id, idx + 1))
+  return map
+}
+
 function GuestItem({ guest, isDependent = false, isOverlay = false }: { guest: any, isDependent?: boolean, isOverlay?: boolean }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `guest-${guest.id}`,
@@ -66,6 +79,15 @@ function GuestItem({ guest, isDependent = false, isOverlay = false }: { guest: a
         <p className="flex items-center gap-2">
           {!isDependent ? <Users className="w-3.5 h-3.5 text-primary/70" /> : <User className="w-3.5 h-3.5 text-muted-foreground" />}
           {guest.name}
+          {guest.dietaryRestrictions?.length > 0 && (
+            <span
+              title={`Restrição alimentar: ${guest.dietaryRestrictions.join(", ")}`}
+              className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-100 border border-amber-200 rounded-full px-1.5 py-0.5"
+            >
+              <WheatOff className="w-3 h-3" />
+              Restrição
+            </span>
+          )}
         </p>
         {!isDependent && guest.family?.guests?.length > 1 && (
           <p className="text-[10px] text-muted-foreground leading-tight tracking-wide mt-1 uppercase opacity-80">Arrastar move toda a família ({guest.family.guests.length} pessoas)</p>
@@ -76,7 +98,7 @@ function GuestItem({ guest, isDependent = false, isOverlay = false }: { guest: a
 }
 
 function TableNode({ data }: { data: any }) {
-  const { table, onUpdateDetails, onRemoveGuest, onClearTable, onDeleteTable } = data;
+  const { table, tableNumber, onUpdateDetails, onRemoveGuest, onClearTable, onDeleteTable } = data;
   const { setNodeRef: setDropRef, isOver } = useDroppable({
     id: `table-${table.id}`,
     data: { type: "TABLE", table },
@@ -87,6 +109,11 @@ function TableNode({ data }: { data: any }) {
   const [open, setOpen] = useState(false)
 
   const isFull = (table.guests?.length || 0) >= table.capacity
+  const dietaryGuests = (table.guests || []).filter((g: any) => g.dietaryRestrictions?.length > 0)
+  const dietaryCount = dietaryGuests.length
+  const dietaryTooltip = dietaryGuests
+    .map((g: any) => `${g.name} (${g.dietaryRestrictions.join(", ")})`)
+    .join("\n")
 
   const customColor = table.color;
   const colorStyle = customColor ? { 
@@ -97,6 +124,25 @@ function TableNode({ data }: { data: any }) {
 
   return (
     <div className="group relative" ref={setDropRef}>
+      {/* Número da mesa (numeração automática para o buffet/impressão) */}
+      {tableNumber != null && (
+        <span
+          title={`Mesa Nº ${tableNumber}`}
+          className="absolute -top-2 -left-2 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-foreground text-background text-xs font-bold shadow-md border border-background"
+        >
+          {tableNumber}
+        </span>
+      )}
+      {/* Alerta de restrição alimentar: badge com contador */}
+      {dietaryCount > 0 && (
+        <span
+          title={`Atenção do buffet — ${dietaryCount} com restrição alimentar:\n${dietaryTooltip}`}
+          className="absolute -top-2 -right-2 z-20 inline-flex items-center gap-1 rounded-full bg-amber-400 text-amber-950 text-[11px] font-bold shadow-md border border-amber-500 px-2 py-0.5"
+        >
+          <WheatOff className="w-3.5 h-3.5" />
+          {dietaryCount}
+        </span>
+      )}
       <div className={`w-32 h-32 rounded-full border-[4px] flex flex-col items-center justify-center shadow-lg transition-all duration-300 ${isOver ? "border-primary bg-primary/10 scale-110 shadow-primary/20" : "hover:scale-105"} ${!customColor ? "bg-gradient-to-br from-background to-muted border-border hover:border-primary/40 hover:shadow-xl" : ""}`} style={isOver ? undefined : colorStyle}>
         <div className="absolute inset-1 rounded-full border border-primary/10 pointer-events-none"></div>
         <span className="font-semibold text-center text-sm px-3 line-clamp-2 leading-tight z-10">{table.name}</span>
@@ -150,7 +196,15 @@ function TableNode({ data }: { data: any }) {
                   ) : (
                     table.guests?.map((g: any) => (
                       <div key={g.id} className="flex items-center justify-between p-2 border-b last:border-0 bg-background hover:bg-muted/50 transition-colors">
-                        <span className="text-sm font-medium">{g.name}</span>
+                        <span className="text-sm">
+                          <span className="font-medium">{g.name}</span>
+                          {g.dietaryRestrictions?.length > 0 && (
+                            <span className="mt-1 flex items-center gap-1 text-[11px] font-semibold text-amber-700">
+                              <WheatOff className="w-3 h-3" />
+                              {g.dietaryRestrictions.join(", ")}
+                            </span>
+                          )}
+                        </span>
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => onRemoveGuest(table.id, g.id)}><X className="h-4 w-4" /></Button>
                       </div>
                     ))
@@ -441,12 +495,13 @@ export function MesasClient({ weddingId, initialTables, initialGuests, initialVe
   const unassignedFamilies = guests.filter(g => (g.isPrimary || !g.familyId) && (!g.tableId || g.family?.guests?.some((dep: any) => !getGuestTableId(dep.id))))
 
   const nodes: Node[] = useMemo(() => {
+    const numberMap = getTableNumberMap(tables)
     return [
       ...tables.map(t => ({
         id: `table-${t.id}`,
         type: 'tableNode',
         position: { x: t.x, y: t.y },
-        data: { table: t, onUpdateDetails: handleUpdateDetails, onRemoveGuest: handleRemoveGuest, onClearTable: handleClearTable, onDeleteTable: handleDeleteTable }
+        data: { table: t, tableNumber: numberMap.get(t.id), onUpdateDetails: handleUpdateDetails, onRemoveGuest: handleRemoveGuest, onClearTable: handleClearTable, onDeleteTable: handleDeleteTable }
       })),
       ...venueElements.map(v => ({
         id: `venue-${v.id}`,
@@ -518,6 +573,14 @@ export function MesasClient({ weddingId, initialTables, initialGuests, initialVe
               Salão Interativo
             </h3>
             <div className="space-x-3">
+              <Link
+                href={`/${weddingId}/mesas/imprimir`}
+                className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background h-8 px-3 shadow-sm hover:border-primary/50 hover:bg-primary/5"
+                title="Exportar mapa + lista do buffet para PDF"
+              >
+                <Printer className="h-4 w-4 mr-1.5" />
+                Exportar PDF
+              </Link>
               <Dialog open={isVenueDialogOpen} onOpenChange={(open) => { setIsVenueDialogOpen(open); if(!open) setPlacementMode(null); }}>
                 <DialogTrigger className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background h-8 px-3 shadow-sm border-dashed border-2 hover:border-primary/50 hover:bg-primary/5">
                   <Plus className="h-4 w-4 mr-1" /> Local
