@@ -85,10 +85,10 @@ export default async function PrintMesasPage({ params }: PageProps) {
             Página 1: mapa numerado. Página 2+: lista de convidados por mesa com restrições alimentares.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 shrink-0 items-center">
           <Link
             href={`/${weddingId}/mesas`}
-            className="inline-flex items-center justify-center rounded-md border px-4 h-10 text-sm font-medium hover:bg-muted"
+            className="inline-flex items-center justify-center rounded-md border px-4 h-10 text-sm font-medium hover:bg-muted whitespace-nowrap shrink-0"
           >
             Voltar ao mapa
           </Link>
