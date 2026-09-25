@@ -56,12 +56,17 @@ export default async function PrintMesasPage({ params }: PageProps) {
   const unseatedDietary = unseatedGuests.filter((g) => g.dietaryRestrictions.length > 0)
 
   // Limites do mapa para normalizar as coordenadas (x/y do ReactFlow) em %
-  const TABLE_SIZE = 128
+  // Usa as dimensões reais de cada mesa/local para o mapa impresso ser fiel.
+  const tableSize = (t: { width: number; height: number }) => ({
+    w: t.width || 128,
+    h: t.height || 128,
+  })
   const xs: number[] = []
   const ys: number[] = []
   tables.forEach((t) => {
-    xs.push(t.x, t.x + TABLE_SIZE)
-    ys.push(t.y, t.y + TABLE_SIZE)
+    const { w, h } = tableSize(t)
+    xs.push(t.x, t.x + w)
+    ys.push(t.y, t.y + h)
   })
   venueElements.forEach((v) => {
     xs.push(v.x, v.x + v.width)
@@ -154,7 +159,7 @@ export default async function PrintMesasPage({ params }: PageProps) {
               {venueElements.map((v) => (
                 <div
                   key={v.id}
-                  className="absolute border-2 border-dashed border-gray-400 rounded-md bg-white flex items-center justify-center"
+                  className={`absolute border-2 border-dashed border-gray-400 bg-white flex items-center justify-center ${v.shape === "CIRCLE" ? "rounded-full" : "rounded-md"}`}
                   style={{
                     left: `${toLeft(v.x)}%`,
                     top: `${toTop(v.y)}%`,
@@ -169,10 +174,16 @@ export default async function PrintMesasPage({ params }: PageProps) {
                 </div>
               ))}
 
-              {/* Mesas numeradas */}
+              {/* Mesas numeradas (forma e tamanho fiéis ao mapa) */}
               {orderedTables.map((t) => {
                 const number = numberById.get(t.id)
                 const dietary = t.guests.filter((g) => g.dietaryRestrictions.length > 0)
+                const { w, h } = tableSize(t)
+                // Escala as dimensões do mapa para o papel, preservando a
+                // proporção entre as mesas. Base 96px para mesa padrão (128).
+                const rw = Math.min(190, Math.max(56, (w / 128) * 96))
+                const rh = Math.min(190, Math.max(56, (h / 128) * 96))
+                const isCircle = (t.shape || "CIRCLE") === "CIRCLE"
                 return (
                   <div
                     key={t.id}
@@ -180,13 +191,15 @@ export default async function PrintMesasPage({ params }: PageProps) {
                     style={{
                       left: `${toLeft(t.x)}%`,
                       top: `${toTop(t.y)}%`,
-                      width: 104,
-                      height: 104,
+                      width: rw + 8,
+                      height: rh + 8,
                     }}
                   >
                     <div
-                      className="relative w-[96px] h-[96px] rounded-full border-[3px] bg-white flex flex-col items-center justify-center shadow"
+                      className={`relative border-[3px] bg-white flex flex-col items-center justify-center shadow overflow-hidden ${isCircle ? "rounded-full" : "rounded-xl"}`}
                       style={{
+                        width: rw,
+                        height: rh,
                         borderColor: t.color || "#1f2937",
                         printColorAdjust: "exact",
                       }}
@@ -249,6 +262,7 @@ export default async function PrintMesasPage({ params }: PageProps) {
                         <p className="font-bold text-sm leading-tight">{t.name}</p>
                         <p className="text-[11px] text-gray-500">
                           {t.guests.length}/{t.capacity} lugares ocupados
+                          {t.shape === "SQUARE" ? " • Quadrada" : t.shape === "RECT" ? " • Retangular" : " • Redonda"}
                         </p>
                       </div>
                     </div>

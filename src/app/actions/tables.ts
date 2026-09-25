@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { requirePermission } from "@/lib/session"
 
-export async function createTable(weddingSlug: string, name: string, capacity: number, color?: string, x: number = 100, y: number = 100) {
+export async function createTable(weddingSlug: string, name: string, capacity: number, color?: string, x: number = 100, y: number = 100, shape: string = "CIRCLE", width: number = 128, height: number = 128) {
   try {
     await requirePermission(weddingSlug, "canManageTables")
     const wedding = await prisma.wedding.findUnique({ where: { slug: weddingSlug } })
@@ -17,7 +17,10 @@ export async function createTable(weddingSlug: string, name: string, capacity: n
         weddingId: wedding.id,
         color,
         x,
-        y
+        y,
+        shape,
+        width,
+        height
       }
     })
     
@@ -100,6 +103,38 @@ export async function updateTableDetails(weddingSlug: string, tableId: string, n
       where: { id: tableId },
       data: { name, capacity, color: color || null }
     })
+    revalidatePath(`/${weddingSlug}/mesas`)
+    return { success: true }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
+export type TableLayout = {
+  shape?: string
+  width?: number
+  height?: number
+}
+
+const TABLE_SHAPES = ["CIRCLE", "SQUARE", "RECT"]
+
+// Atualiza forma e/ou dimensões da mesa (usado pelo redimensionamento
+// por arrasto no mapa e pelo seletor de forma no dialog da mesa).
+export async function updateTableLayout(weddingSlug: string, tableId: string, layout: TableLayout) {
+  try {
+    await requirePermission(weddingSlug, "canManageTables")
+    const data: { shape?: string; width?: number; height?: number } = {}
+    if (layout.shape !== undefined) {
+      if (!TABLE_SHAPES.includes(layout.shape)) throw new Error("Forma inválida")
+      data.shape = layout.shape
+    }
+    if (layout.width !== undefined) {
+      data.width = Math.min(600, Math.max(72, Math.round(layout.width)))
+    }
+    if (layout.height !== undefined) {
+      data.height = Math.min(600, Math.max(72, Math.round(layout.height)))
+    }
+    await prisma.table.update({ where: { id: tableId }, data })
     revalidatePath(`/${weddingSlug}/mesas`)
     return { success: true }
   } catch (error: any) {

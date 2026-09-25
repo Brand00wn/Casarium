@@ -305,6 +305,10 @@ model Table {
   x         Float   @default(0)
   y         Float   @default(0)
   color     String?
+  // Forma da mesa no mapa: CIRCLE (redonda), SQUARE (quadrada) ou RECT (retangular)
+  shape     String  @default("CIRCLE")
+  width     Float   @default(128)
+  height    Float   @default(128)
   guests    Guest[]
   wedding   Wedding @relation(fields: [weddingId], references: [id], onDelete: Cascade)
 }
@@ -348,6 +352,8 @@ model VenueElement {
   height    Float       @default(200)
   color     String?
   icon      String?
+  // Forma do elemento no mapa: RECT (retangular) ou CIRCLE (circular)
+  shape     String      @default("RECT")
   wedding   Wedding     @relation(fields: [weddingId], references: [id], onDelete: Cascade)
 }
 

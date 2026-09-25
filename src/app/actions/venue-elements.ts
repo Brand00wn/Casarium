@@ -32,12 +32,39 @@ export async function createVenueElement(weddingSlug: string, type: ElementType,
   }
 }
 
-export async function updateVenueElementDetails(weddingSlug: string, id: string, name: string, color?: string, icon?: string) {
+export async function updateVenueElementDetails(weddingSlug: string, id: string, name: string, color?: string, icon?: string, shape?: string) {
+  try {
+    await requirePermission(weddingSlug, "canManageTables")
+    const data: { name: string; color: string | null; icon: string | null; shape?: string } = {
+      name,
+      color: color || null,
+      icon: icon || null
+    }
+    if (shape !== undefined) {
+      if (!["RECT", "CIRCLE"].includes(shape)) throw new Error("Forma inválida")
+      data.shape = shape
+    }
+    await prisma.venueElement.update({
+      where: { id },
+      data
+    })
+    revalidatePath(`/${weddingSlug}/mesas`)
+    return { success: true }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
+// Atualiza as dimensões do elemento (usado pelo redimensionamento por arrasto no mapa).
+export async function updateVenueElementSize(weddingSlug: string, id: string, width: number, height: number) {
   try {
     await requirePermission(weddingSlug, "canManageTables")
     await prisma.venueElement.update({
       where: { id },
-      data: { name, color: color || null, icon: icon || null }
+      data: {
+        width: Math.min(1200, Math.max(60, Math.round(width))),
+        height: Math.min(1200, Math.max(60, Math.round(height)))
+      }
     })
     revalidatePath(`/${weddingSlug}/mesas`)
     return { success: true }
