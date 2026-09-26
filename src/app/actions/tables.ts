@@ -129,9 +129,11 @@ export async function updateTableLayout(weddingSlug: string, tableId: string, la
       data.shape = layout.shape
     }
     if (layout.width !== undefined) {
+      if (!Number.isFinite(layout.width)) throw new Error("Dimensão inválida")
       data.width = Math.min(600, Math.max(72, Math.round(layout.width)))
     }
     if (layout.height !== undefined) {
+      if (!Number.isFinite(layout.height)) throw new Error("Dimensão inválida")
       data.height = Math.min(600, Math.max(72, Math.round(layout.height)))
     }
     await prisma.table.update({ where: { id: tableId }, data })

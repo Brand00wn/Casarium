@@ -59,6 +59,7 @@ export async function updateVenueElementDetails(weddingSlug: string, id: string,
 export async function updateVenueElementSize(weddingSlug: string, id: string, width: number, height: number) {
   try {
     await requirePermission(weddingSlug, "canManageTables")
+    if (!Number.isFinite(width) || !Number.isFinite(height)) throw new Error("Dimensão inválida")
     await prisma.venueElement.update({
       where: { id },
       data: {

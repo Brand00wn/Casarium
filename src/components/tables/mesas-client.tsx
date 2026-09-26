@@ -161,6 +161,7 @@ function TableNode({ data, selected }: { data: any, selected?: boolean }) {
   return (
     <div className="group relative" ref={setDropRef}>
       <NodeResizer
+        nodeId={`table-${table.id}`}
         isVisible={!!selected}
         minWidth={MIN_TABLE_SIZE}
         minHeight={MIN_TABLE_SIZE}
@@ -187,7 +188,7 @@ function TableNode({ data, selected }: { data: any, selected?: boolean }) {
           {dietaryCount}
         </span>
       )}
-      <div className={`border-[4px] flex flex-col items-center justify-center shadow-lg transition-all duration-300 overflow-hidden ${shapeRadiusClass} ${isOver ? "border-primary bg-primary/10 scale-110 shadow-primary/20" : "hover:scale-105"} ${!customColor ? "bg-gradient-to-br from-background to-muted border-border hover:border-primary/40 hover:shadow-xl" : ""}`} style={{ width: "100%", height: "100%", ...(isOver ? undefined : colorStyle) }}>
+      <div data-testid={`table-shape-${table.id}`} className={`border-[4px] flex flex-col items-center justify-center shadow-lg transition-all duration-300 overflow-hidden ${shapeRadiusClass} ${isOver ? "border-primary bg-primary/10 scale-110 shadow-primary/20" : "hover:scale-105"} ${!customColor ? "bg-gradient-to-br from-background to-muted border-border hover:border-primary/40 hover:shadow-xl" : ""}`} style={{ width: "100%", height: "100%", ...(isOver ? undefined : colorStyle) }}>
         <div className={`absolute inset-1 border border-primary/10 pointer-events-none ${shapeRadiusClass}`}></div>
         <span className="font-semibold text-center text-sm px-3 line-clamp-2 leading-tight z-10">{table.name}</span>
         <span className={`text-xs font-medium flex items-center mt-2 px-2.5 py-0.5 rounded-full z-10 shadow-sm border ${isFull ? 'bg-destructive/10 text-destructive border-destructive/20' : 'bg-background text-muted-foreground border-border'}`}>
@@ -317,8 +318,9 @@ function VenueNode({ data, selected }: { data: any, selected?: boolean }) {
   }
 
   return (
-    <div className={`group relative flex flex-col items-center justify-center border-2 border-dashed ${venueRadiusClass} shadow-sm backdrop-blur-md transition-all overflow-hidden ${!customColor ? config.bg + ' ' + config.border : ''} hover:shadow-md`} style={{ width: "100%", height: "100%", ...customStyle }}>
+    <div data-testid={`venue-shape-${element.id}`} className={`group relative flex flex-col items-center justify-center border-2 border-dashed ${venueRadiusClass} shadow-sm backdrop-blur-md transition-all overflow-hidden ${!customColor ? config.bg + ' ' + config.border : ''} hover:shadow-md`} style={{ width: "100%", height: "100%", ...customStyle }}>
       <NodeResizer
+        nodeId={`venue-${element.id}`}
         isVisible={!!selected}
         minWidth={60}
         minHeight={60}
@@ -403,9 +405,29 @@ export function MesasClient({ weddingId, initialTables, initialGuests, initialVe
   const [venueElements, setVenueElements] = useState<any[]>(initialVenueElements)
   const router = useRouter()
 
-  useEffect(() => { setTables(initialTables) }, [initialTables])
+  useEffect(() => {
+    // Sincroniza com o servidor (ex.: após server actions com revalidatePath
+    // ou mudanças da IA) preservando o estado local de seleção — sem isso,
+    // o refetch assíncrono do Next apagava a seleção (e as alças de resize)
+    // logo depois do clique, e podia reverter edição ainda não persistida.
+    setTables(prev => {
+      const prevById = new Map(prev.map((t: any) => [t.id, t]))
+      return initialTables.map((t: any) => {
+        const p = prevById.get(t.id)
+        return p ? { ...t, selected: p.selected } : t
+      })
+    })
+  }, [initialTables])
   useEffect(() => { setGuests(initialGuests) }, [initialGuests])
-  useEffect(() => { setVenueElements(initialVenueElements) }, [initialVenueElements])
+  useEffect(() => {
+    setVenueElements(prev => {
+      const prevById = new Map(prev.map((v: any) => [v.id, v]))
+      return initialVenueElements.map((v: any) => {
+        const p = prevById.get(v.id)
+        return p ? { ...v, selected: p.selected } : v
+      })
+    })
+  }, [initialVenueElements])
 
   const [isMounted, setIsMounted] = useState(false)
   useEffect(() => {
@@ -585,14 +607,23 @@ export function MesasClient({ weddingId, initialTables, initialGuests, initialVe
         id: `table-${t.id}`,
         type: 'tableNode',
         position: { x: t.x, y: t.y },
-        style: { width: t.width || DEFAULT_TABLE_SIZE, height: t.height || DEFAULT_TABLE_SIZE },
+        // Dimensões no nível do nó (não em `style`): o React Flow só marca o
+        // nó como visível quando width/height existem aqui. Via `style` ele
+        // ficava com `visibility: hidden` para sempre e a mesa "sumia".
+        width: t.width || DEFAULT_TABLE_SIZE,
+        height: t.height || DEFAULT_TABLE_SIZE,
+        // Seleção controlada pelo nosso onNodesChange (ver abaixo).
+        selected: !!t.selected,
         data: { table: t, tableNumber: numberMap.get(t.id), onUpdateDetails: handleUpdateDetails, onUpdateLayout: handleUpdateLayout, onRemoveGuest: handleRemoveGuest, onClearTable: handleClearTable, onDeleteTable: handleDeleteTable }
       })),
       ...venueElements.map(v => ({
         id: `venue-${v.id}`,
         type: 'venueNode',
         position: { x: v.x, y: v.y },
-        style: { width: v.width || 200, height: v.height || 200 },
+        // Mesmo motivo das mesas: dimensões no nó para garantir visibilidade.
+        width: v.width || 200,
+        height: v.height || 200,
+        selected: !!v.selected,
         data: { element: v, onDeleteVenue: handleDeleteVenue, onUpdateVenue: handleUpdateVenueDetails }
       }))
     ]
@@ -600,7 +631,20 @@ export function MesasClient({ weddingId, initialTables, initialGuests, initialVe
 
   const onNodesChange = useCallback((changes: NodeChange<Node>[]) => {
     changes.forEach((change) => {
-      if (change.type === 'position' && change.position) {
+      // Seleção é controlada manualmente: nosso handler ignora parte dos
+      // changes por padrão, então aplicamos o `select` no estado para as
+      // alças de redimensionamento (NodeResizer) aparecerem ao clicar.
+      if (change.type === 'select') {
+        const id = change.id
+        const selected = !!change.selected
+        if (id.startsWith('table-')) {
+          const dbId = id.replace('table-', '')
+          setTables(prev => prev.map(t => t.id === dbId ? { ...t, selected } : (selected ? { ...t, selected: false } : t)))
+        } else if (id.startsWith('venue-')) {
+          const dbId = id.replace('venue-', '')
+          setVenueElements(prev => prev.map(v => v.id === dbId ? { ...v, selected } : (selected ? { ...v, selected: false } : v)))
+        }
+      } else if (change.type === 'position' && change.position) {
         const id = change.id
         if (id.startsWith('table-')) {
           const dbId = id.replace('table-', '')
@@ -616,27 +660,33 @@ export function MesasClient({ weddingId, initialTables, initialGuests, initialVe
           }
         }
       } else if (change.type === 'dimensions' && change.dimensions) {
-        // Redimensionamento por arrasto das alças da borda: atualiza na hora
-        // e só persiste no banco quando solta o mouse (resizing === false).
+        // Redimensionamento por arrasto das alças da borda.
+        // Durante o arrasto atualiza SÓ o store interno do React Flow (preview
+        // ao vivo) via rfInstance.updateNode — sem setState, pois re-renderizar
+        // o componente no meio do gesto destrói o NodeResizer e corrompe as
+        // dimensões (virava NaN e a mesa "sumia").
+        // Ao soltar o mouse (resizing === false) sincroniza o estado e persiste.
+        // Valores inválidos (ex.: NaN) são ignorados para nunca corromper nada.
         const { width, height } = change.dimensions
+        if (!Number.isFinite(width) || !Number.isFinite(height)) return
         const id = change.id
         const finished = (change as { resizing?: boolean }).resizing === false
+        if (!finished) {
+          rfInstance?.updateNode(id, { width, height })
+          return
+        }
         if (id.startsWith('table-')) {
           const dbId = id.replace('table-', '')
           setTables(prev => prev.map(t => t.id === dbId ? { ...t, width, height } : t))
-          if (finished) {
-            updateTableLayout(weddingId, dbId, { width, height })
-          }
+          updateTableLayout(weddingId, dbId, { width, height })
         } else if (id.startsWith('venue-')) {
           const dbId = id.replace('venue-', '')
           setVenueElements(prev => prev.map(v => v.id === dbId ? { ...v, width, height } : v))
-          if (finished) {
-            import('@/app/actions/venue-elements').then(m => m.updateVenueElementSize(weddingId, dbId, width, height))
-          }
+          import('@/app/actions/venue-elements').then(m => m.updateVenueElementSize(weddingId, dbId, width, height))
         }
       }
     })
-  }, [weddingId])
+  }, [weddingId, rfInstance])
 
   if (!isMounted) {
     return <div className="flex items-center justify-center h-[calc(100vh-100px)]"><div className="animate-pulse flex items-center text-muted-foreground"><Settings2 className="w-5 h-5 mr-2 animate-spin" /> Carregando mapa...</div></div>
