@@ -146,17 +146,19 @@ function TableNode({ data }: { data: any }) {
           <Users className="w-3 h-3 mr-1.5" />
           {table.guests?.length || 0}/{table.capacity}
         </span>
-        {/* Restrição alimentar: só a quantidade, abaixo da ocupação */}
-        {dietaryCount > 0 && (
-          <span
-            title={`Atenção do buffet — ${dietaryCount} com restrição alimentar:\n${dietaryTooltip}`}
-            className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-400 text-amber-950 text-[10px] font-bold shadow-sm border border-amber-500 px-1.5 py-px z-10"
-          >
-            <WheatOff className="w-3 h-3" />
-            {dietaryCount}
-          </span>
-        )}
       </div>
+      {/* Restrição alimentar: selo sobreposto à borda inferior, FORA do fluxo —
+          assim o interior do círculo fica idêntico em todas as mesas e o
+          alinhamento nunca quebra (só mostra a quantidade) */}
+      {dietaryCount > 0 && (
+        <span
+          title={`Atenção do buffet — ${dietaryCount} com restrição alimentar:\n${dietaryTooltip}`}
+          className="absolute -bottom-2 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 rounded-full bg-amber-400 text-amber-950 text-[10px] font-bold shadow-md border border-amber-500 px-1.5 py-px z-10 whitespace-nowrap"
+        >
+          <WheatOff className="w-3 h-3" />
+          {dietaryCount}
+        </span>
+      )}
       
       {onUpdateDetails && (
         <Dialog open={open} onOpenChange={setOpen}>
