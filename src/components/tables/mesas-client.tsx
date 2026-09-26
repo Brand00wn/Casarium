@@ -73,6 +73,10 @@ export const VENUE_SHAPES = [
 export const DEFAULT_TABLE_SIZE = 128
 export const MIN_TABLE_SIZE = 72
 export const MAX_TABLE_SIZE = 600
+// Tamanho das alças de redimensionamento (padrão do RF é ~8px, difícil de mirar).
+// zIndex acima dos badges para as alças nunca ficarem encobertas e sem clique.
+export const RESIZE_HANDLE_STYLE = { width: 16, height: 16, zIndex: 30 }
+export const RESIZE_LINE_STYLE = { zIndex: 30 }
 
 function GuestItem({ guest, isDependent = false, isOverlay = false }: { guest: any, isDependent?: boolean, isOverlay?: boolean }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -136,14 +140,17 @@ function TableNode({ data, selected }: { data: any, selected?: boolean }) {
   const shape = table.shape || "CIRCLE"
   const tableWidth = table.width || DEFAULT_TABLE_SIZE
   const tableHeight = table.height || DEFAULT_TABLE_SIZE
-  // Redonda e quadrada mantêm proporção ao redimensionar; retangular é livre
-  const keepSquare = shape !== "RECT"
+  // Só a forma circular trava a proporção (fica sempre redondinha).
+  // Quadrada e retangular redimensionam livres em todas as direções
+  // (um quadrado pode virar retângulo e vice-versa).
+  const keepSquare = shape === "CIRCLE"
   const shapeRadiusClass = shape === "CIRCLE" ? "rounded-full" : "rounded-2xl"
 
   const handleShapeChange = (next: string) => {
     setEditShape(next)
-    // Quadrada sempre com largura = altura; redonda sempre circular
-    if (next === "SQUARE") {
+    // Redonda sempre com largura = altura; quadrada começa quadrada
+    // (depois pode ser esticada livremente para virar retângulo).
+    if (next === "CIRCLE" || next === "SQUARE") {
       const side = Math.max(tableWidth, tableHeight)
       onUpdateLayout?.(table.id, { shape: next, width: side, height: side })
     } else {
@@ -168,24 +175,27 @@ function TableNode({ data, selected }: { data: any, selected?: boolean }) {
         maxWidth={MAX_TABLE_SIZE}
         maxHeight={MAX_TABLE_SIZE}
         keepAspectRatio={keepSquare}
+        handleStyle={RESIZE_HANDLE_STYLE}
+        lineStyle={RESIZE_LINE_STYLE}
       />
       {/* Número da mesa (numeração automática para o buffet/impressão) */}
       {tableNumber != null && (
         <span
           title={`Mesa Nº ${tableNumber}`}
-          className="absolute -top-2 -left-2 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-foreground text-background text-xs font-bold shadow-md border border-background"
+          className="absolute -top-2 -left-2 flex h-7 w-7 items-center justify-center rounded-full bg-foreground text-background text-xs font-bold shadow-md border border-background"
         >
           {tableNumber}
         </span>
       )}
-      {/* Alerta de restrição alimentar: badge com contador */}
+      {/* Alerta de restrição alimentar: badge com contador, embaixo da mesa
+          para não cobrir o nome nem as alças de redimensionamento */}
       {dietaryCount > 0 && (
         <span
           title={`Atenção do buffet — ${dietaryCount} com restrição alimentar:\n${dietaryTooltip}`}
-          className="absolute -top-2 -right-2 z-20 inline-flex items-center gap-1 rounded-full bg-amber-400 text-amber-950 text-[11px] font-bold shadow-md border border-amber-500 px-2 py-0.5"
+          className="absolute -bottom-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 rounded-full bg-amber-400 text-amber-950 text-[11px] font-bold shadow-md border border-amber-500 px-2 py-0.5 whitespace-nowrap"
         >
           <WheatOff className="w-3.5 h-3.5" />
-          {dietaryCount}
+          {dietaryCount} {dietaryCount === 1 ? "restrição" : "restrições"}
         </span>
       )}
       <div data-testid={`table-shape-${table.id}`} className={`border-[4px] flex flex-col items-center justify-center shadow-lg transition-all duration-300 overflow-hidden ${shapeRadiusClass} ${isOver ? "border-primary bg-primary/10 scale-110 shadow-primary/20" : "hover:scale-105"} ${!customColor ? "bg-gradient-to-br from-background to-muted border-border hover:border-primary/40 hover:shadow-xl" : ""}`} style={{ width: "100%", height: "100%", ...(isOver ? undefined : colorStyle) }}>
@@ -195,14 +205,15 @@ function TableNode({ data, selected }: { data: any, selected?: boolean }) {
           <Users className="w-3 h-3 mr-1.5" />
           {table.guests?.length || 0}/{table.capacity}
         </span>
-        <span className="text-[10px] text-muted-foreground mt-1 z-10 opacity-70">
-          {Math.round(tableWidth)}×{Math.round(tableHeight)}
-        </span>
       </div>
       
       {onUpdateDetails && (
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger className={buttonVariants({ variant: "secondary", size: "icon", className: "absolute -top-1 -right-1 h-8 w-8 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-all duration-200 z-50 nodrag hover:scale-110 border bg-background" })}>
+          {/* Sem z-index alto: as alças de resize (z-30) ficam por cima nos
+              cantos para serem agarráveis; o botão continua clicável no restante */}
+          <DialogTrigger
+            className={buttonVariants({ variant: "secondary", size: "icon", className: "absolute -top-1 -right-1 h-8 w-8 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-all duration-200 nodrag hover:scale-110 border bg-background" })}
+          >
             <Settings2 className="h-4 w-4 text-primary" />
           </DialogTrigger>
           <DialogContent className="max-w-md nodrag">
@@ -280,7 +291,7 @@ function TableNode({ data, selected }: { data: any, selected?: boolean }) {
         <Button 
           variant="destructive" 
           size="icon" 
-          className="absolute -top-1 -left-1 h-8 w-8 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-all duration-200 z-50 nodrag hover:scale-110 border bg-background text-destructive" 
+          className="absolute -top-1 -left-1 h-8 w-8 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-all duration-200 nodrag hover:scale-110 border bg-background text-destructive" 
           onClick={() => onDeleteTable(table.id)}
         >
           <Trash2 className="h-4 w-4" />
@@ -318,7 +329,10 @@ function VenueNode({ data, selected }: { data: any, selected?: boolean }) {
   }
 
   return (
-    <div data-testid={`venue-shape-${element.id}`} className={`group relative flex flex-col items-center justify-center border-2 border-dashed ${venueRadiusClass} shadow-sm backdrop-blur-md transition-all overflow-hidden ${!customColor ? config.bg + ' ' + config.border : ''} hover:shadow-md`} style={{ width: "100%", height: "100%", ...customStyle }}>
+    // O root NÃO tem overflow-hidden: as alças do NodeResizer ficam nas bordas
+    // (metade para fora) e seriam cortadas — foi isso que impedia redimensionar
+    // os locais. O corte fica só no conteúdo interno.
+    <div data-testid={`venue-shape-${element.id}`} className="group relative w-full h-full">
       <NodeResizer
         nodeId={`venue-${element.id}`}
         isVisible={!!selected}
@@ -326,14 +340,19 @@ function VenueNode({ data, selected }: { data: any, selected?: boolean }) {
         minHeight={60}
         maxWidth={1200}
         maxHeight={1200}
+        handleStyle={RESIZE_HANDLE_STYLE}
+        lineStyle={RESIZE_LINE_STYLE}
       />
-      <Icon className={`w-8 h-8 mb-2 opacity-50 ${!customColor ? config.text : ''}`} style={customColor ? { color: customColor } : {}} />
-      <span className={`font-semibold text-center text-sm px-2 ${!customColor ? config.text : ''}`} style={customColor ? { color: customColor } : {}}>{config.label}</span>
-      <span className="text-[10px] opacity-60 mt-1">{Math.round(element.width || 0)}×{Math.round(element.height || 0)}</span>
+      <div className={`flex flex-col items-center justify-center border-2 border-dashed ${venueRadiusClass} shadow-sm backdrop-blur-md transition-all overflow-hidden w-full h-full ${!customColor ? config.bg + ' ' + config.border : ''} hover:shadow-md`} style={customStyle}>
+        <Icon className={`w-8 h-8 mb-2 opacity-50 ${!customColor ? config.text : ''}`} style={customColor ? { color: customColor } : {}} />
+        <span className={`font-semibold text-center text-sm px-2 ${!customColor ? config.text : ''}`} style={customColor ? { color: customColor } : {}}>{config.label}</span>
+      </div>
       
       {onUpdateVenue && (
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger className={buttonVariants({ variant: "secondary", size: "icon", className: "absolute -top-1 -left-1 h-8 w-8 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-all duration-200 z-50 nodrag hover:scale-110 border bg-background" })}>
+          <DialogTrigger
+            className={buttonVariants({ variant: "secondary", size: "icon", className: "absolute -top-1 -left-1 h-8 w-8 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-all duration-200 nodrag hover:scale-110 border bg-background" })}
+          >
             <Settings2 className="h-4 w-4 text-primary" />
           </DialogTrigger>
           <DialogContent className="max-w-xs nodrag">
@@ -384,7 +403,7 @@ function VenueNode({ data, selected }: { data: any, selected?: boolean }) {
         <Button 
           variant="destructive" 
           size="icon" 
-          className="absolute -top-3 -right-3 h-8 w-8 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-all duration-200 z-50 nodrag scale-75 hover:scale-100" 
+          className="absolute -top-3 -right-3 h-8 w-8 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-all duration-200 nodrag scale-75 hover:scale-100" 
           onClick={() => onDeleteVenue(element.id)}
         >
           <Trash2 className="h-4 w-4" />
@@ -630,6 +649,15 @@ export function MesasClient({ weddingId, initialTables, initialGuests, initialVe
   }, [tables, venueElements, guests])
 
   const onNodesChange = useCallback((changes: NodeChange<Node>[]) => {
+    // Ids com alteracao de dimensao EM ANDAMENTO neste lote: pertencem a um
+    // gesto do NodeResizer (as alças de cima/esquerda também movem x/y).
+    // Durante esse gesto NÃO tocamos no estado React — qualquer setState aqui
+    // re-renderiza no meio do arrasto, destrói o gesto e corrompe os valores.
+    const resizingIds = new Set(
+      changes
+        .filter((c): c is Extract<NodeChange<Node>, { type: "dimensions" }> => c.type === "dimensions" && (c as { resizing?: boolean }).resizing !== false)
+        .map(c => c.id)
+    )
     changes.forEach((change) => {
       // Seleção é controlada manualmente: nosso handler ignora parte dos
       // changes por padrão, então aplicamos o `select` no estado para as
@@ -646,6 +674,9 @@ export function MesasClient({ weddingId, initialTables, initialGuests, initialVe
         }
       } else if (change.type === 'position' && change.position) {
         const id = change.id
+        // Posição vinda do redimensionamento (alças de cima/esquerda): ignora
+        // durante o gesto, a posição final é sincronizada junto com o tamanho.
+        if (resizingIds.has(id)) return
         if (id.startsWith('table-')) {
           const dbId = id.replace('table-', '')
           setTables(prev => prev.map(t => t.id === dbId ? { ...t, x: change.position!.x, y: change.position!.y } : t))
@@ -661,28 +692,31 @@ export function MesasClient({ weddingId, initialTables, initialGuests, initialVe
         }
       } else if (change.type === 'dimensions' && change.dimensions) {
         // Redimensionamento por arrasto das alças da borda.
-        // Durante o arrasto atualiza SÓ o store interno do React Flow (preview
-        // ao vivo) via rfInstance.updateNode — sem setState, pois re-renderizar
-        // o componente no meio do gesto destrói o NodeResizer e corrompe as
-        // dimensões (virava NaN e a mesa "sumia").
-        // Ao soltar o mouse (resizing === false) sincroniza o estado e persiste.
+        // Durante o arrasto não toca no estado React (ver resizingIds acima).
+        // Ao soltar o mouse (resizing === false) sincroniza tamanho + posição
+        // atual (lida do store, pois alças de cima/esquerda também movem x/y)
+        // e persiste tudo no banco.
         // Valores inválidos (ex.: NaN) são ignorados para nunca corromper nada.
         const { width, height } = change.dimensions
         if (!Number.isFinite(width) || !Number.isFinite(height)) return
         const id = change.id
         const finished = (change as { resizing?: boolean }).resizing === false
         if (!finished) {
-          rfInstance?.updateNode(id, { width, height })
           return
         }
+        const finalPos = rfInstance?.getNode(id)?.position
         if (id.startsWith('table-')) {
           const dbId = id.replace('table-', '')
-          setTables(prev => prev.map(t => t.id === dbId ? { ...t, width, height } : t))
+          setTables(prev => prev.map(t => t.id === dbId ? { ...t, width, height, ...(finalPos ? { x: finalPos.x, y: finalPos.y } : {}) } : t))
           updateTableLayout(weddingId, dbId, { width, height })
+          if (finalPos) updateTablePosition(weddingId, dbId, finalPos.x, finalPos.y)
         } else if (id.startsWith('venue-')) {
           const dbId = id.replace('venue-', '')
-          setVenueElements(prev => prev.map(v => v.id === dbId ? { ...v, width, height } : v))
-          import('@/app/actions/venue-elements').then(m => m.updateVenueElementSize(weddingId, dbId, width, height))
+          setVenueElements(prev => prev.map(v => v.id === dbId ? { ...v, width, height, ...(finalPos ? { x: finalPos.x, y: finalPos.y } : {}) } : v))
+          import('@/app/actions/venue-elements').then(m => {
+            m.updateVenueElementSize(weddingId, dbId, width, height)
+            if (finalPos) m.updateVenueElementPosition(weddingId, dbId, finalPos.x, finalPos.y)
+          })
         }
       }
     })
