@@ -32,21 +32,12 @@ export async function createVenueElement(weddingSlug: string, type: ElementType,
   }
 }
 
-export async function updateVenueElementDetails(weddingSlug: string, id: string, name: string, color?: string, icon?: string, shape?: string) {
+export async function updateVenueElementDetails(weddingSlug: string, id: string, name: string, color?: string, icon?: string) {
   try {
     await requirePermission(weddingSlug, "canManageTables")
-    const data: { name: string; color: string | null; icon: string | null; shape?: string } = {
-      name,
-      color: color || null,
-      icon: icon || null
-    }
-    if (shape !== undefined) {
-      if (!["RECT", "CIRCLE"].includes(shape)) throw new Error("Forma inválida")
-      data.shape = shape
-    }
     await prisma.venueElement.update({
       where: { id },
-      data
+      data: { name, color: color || null, icon: icon || null }
     })
     revalidatePath(`/${weddingSlug}/mesas`)
     return { success: true }

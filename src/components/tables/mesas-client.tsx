@@ -28,7 +28,6 @@ import {
   updateTablePosition, 
   createTable, 
   updateTableDetails,
-  updateTableLayout,
   unassignGuestFromTable,
   clearTableGuests,
   deleteTable
@@ -58,23 +57,8 @@ export function getTableNumberMap(tables: any[]): Map<string, number> {
   return map
 }
 
-// Formas disponíveis: mesas (redonda/quadrada/retangular) e locais (retangular/circular).
-export const TABLE_SHAPES = [
-  { value: "CIRCLE", label: "Redonda" },
-  { value: "SQUARE", label: "Quadrada" },
-  { value: "RECT", label: "Retangular" },
-] as const
-
-export const VENUE_SHAPES = [
-  { value: "RECT", label: "Retangular" },
-  { value: "CIRCLE", label: "Circular" },
-] as const
-
-export const DEFAULT_TABLE_SIZE = 128
-export const MIN_TABLE_SIZE = 72
-export const MAX_TABLE_SIZE = 600
-// Tamanho das alças de redimensionamento (padrão do RF é ~8px, difícil de mirar).
-// zIndex acima dos badges para as alças nunca ficarem encobertas e sem clique.
+// Tamanho das alças de redimensionamento dos locais (padrão do RF é ~8px,
+// difícil de mirar). zIndex acima dos botões para nunca ficarem encobertas.
 export const RESIZE_HANDLE_STYLE = { width: 16, height: 16, zIndex: 30 }
 export const RESIZE_LINE_STYLE = { zIndex: 30 }
 
@@ -118,8 +102,8 @@ function GuestItem({ guest, isDependent = false, isOverlay = false }: { guest: a
   )
 }
 
-function TableNode({ data, selected }: { data: any, selected?: boolean }) {
-  const { table, tableNumber, onUpdateDetails, onUpdateLayout, onRemoveGuest, onClearTable, onDeleteTable } = data;
+function TableNode({ data }: { data: any }) {
+  const { table, tableNumber, onUpdateDetails, onRemoveGuest, onClearTable, onDeleteTable } = data;
   const { setNodeRef: setDropRef, isOver } = useDroppable({
     id: `table-${table.id}`,
     data: { type: "TABLE", table },
@@ -127,7 +111,6 @@ function TableNode({ data, selected }: { data: any, selected?: boolean }) {
   const [editName, setEditName] = useState(table.name)
   const [editCap, setEditCap] = useState(table.capacity.toString())
   const [editColor, setEditColor] = useState(table.color || "")
-  const [editShape, setEditShape] = useState(table.shape || "CIRCLE")
   const [open, setOpen] = useState(false)
 
   const isFull = (table.guests?.length || 0) >= table.capacity
@@ -137,27 +120,6 @@ function TableNode({ data, selected }: { data: any, selected?: boolean }) {
     .map((g: any) => `${g.name} (${g.dietaryRestrictions.join(", ")})`)
     .join("\n")
 
-  const shape = table.shape || "CIRCLE"
-  const tableWidth = table.width || DEFAULT_TABLE_SIZE
-  const tableHeight = table.height || DEFAULT_TABLE_SIZE
-  // Só a forma circular trava a proporção (fica sempre redondinha).
-  // Quadrada e retangular redimensionam livres em todas as direções
-  // (um quadrado pode virar retângulo e vice-versa).
-  const keepSquare = shape === "CIRCLE"
-  const shapeRadiusClass = shape === "CIRCLE" ? "rounded-full" : "rounded-2xl"
-
-  const handleShapeChange = (next: string) => {
-    setEditShape(next)
-    // Redonda sempre com largura = altura; quadrada começa quadrada
-    // (depois pode ser esticada livremente para virar retângulo).
-    if (next === "CIRCLE" || next === "SQUARE") {
-      const side = Math.max(tableWidth, tableHeight)
-      onUpdateLayout?.(table.id, { shape: next, width: side, height: side })
-    } else {
-      onUpdateLayout?.(table.id, { shape: next })
-    }
-  }
-
   const customColor = table.color;
   const colorStyle = customColor ? { 
     borderColor: customColor, 
@@ -166,18 +128,8 @@ function TableNode({ data, selected }: { data: any, selected?: boolean }) {
   } : {};
 
   return (
+    // Mesa sempre redonda e de tamanho fixo — só os locais são redimensionáveis.
     <div className="group relative" ref={setDropRef}>
-      <NodeResizer
-        nodeId={`table-${table.id}`}
-        isVisible={!!selected}
-        minWidth={MIN_TABLE_SIZE}
-        minHeight={MIN_TABLE_SIZE}
-        maxWidth={MAX_TABLE_SIZE}
-        maxHeight={MAX_TABLE_SIZE}
-        keepAspectRatio={keepSquare}
-        handleStyle={RESIZE_HANDLE_STYLE}
-        lineStyle={RESIZE_LINE_STYLE}
-      />
       {/* Número da mesa (numeração automática para o buffet/impressão) */}
       {tableNumber != null && (
         <span
@@ -187,8 +139,7 @@ function TableNode({ data, selected }: { data: any, selected?: boolean }) {
           {tableNumber}
         </span>
       )}
-      {/* Alerta de restrição alimentar: badge com contador, embaixo da mesa
-          para não cobrir o nome nem as alças de redimensionamento */}
+      {/* Alerta de restrição alimentar: badge com contador, embaixo da mesa */}
       {dietaryCount > 0 && (
         <span
           title={`Atenção do buffet — ${dietaryCount} com restrição alimentar:\n${dietaryTooltip}`}
@@ -198,8 +149,8 @@ function TableNode({ data, selected }: { data: any, selected?: boolean }) {
           {dietaryCount} {dietaryCount === 1 ? "restrição" : "restrições"}
         </span>
       )}
-      <div data-testid={`table-shape-${table.id}`} className={`border-[4px] flex flex-col items-center justify-center shadow-lg transition-all duration-300 overflow-hidden ${shapeRadiusClass} ${isOver ? "border-primary bg-primary/10 scale-110 shadow-primary/20" : "hover:scale-105"} ${!customColor ? "bg-gradient-to-br from-background to-muted border-border hover:border-primary/40 hover:shadow-xl" : ""}`} style={{ width: "100%", height: "100%", ...(isOver ? undefined : colorStyle) }}>
-        <div className={`absolute inset-1 border border-primary/10 pointer-events-none ${shapeRadiusClass}`}></div>
+      <div data-testid={`table-shape-${table.id}`} className={`w-32 h-32 rounded-full border-[4px] flex flex-col items-center justify-center shadow-lg transition-all duration-300 ${isOver ? "border-primary bg-primary/10 scale-110 shadow-primary/20" : "hover:scale-105"} ${!customColor ? "bg-gradient-to-br from-background to-muted border-border hover:border-primary/40 hover:shadow-xl" : ""}`} style={isOver ? undefined : colorStyle}>
+        <div className="absolute inset-1 rounded-full border border-primary/10 pointer-events-none"></div>
         <span className="font-semibold text-center text-sm px-3 line-clamp-2 leading-tight z-10">{table.name}</span>
         <span className={`text-xs font-medium flex items-center mt-2 px-2.5 py-0.5 rounded-full z-10 shadow-sm border ${isFull ? 'bg-destructive/10 text-destructive border-destructive/20' : 'bg-background text-muted-foreground border-border'}`}>
           <Users className="w-3 h-3 mr-1.5" />
@@ -209,10 +160,8 @@ function TableNode({ data, selected }: { data: any, selected?: boolean }) {
       
       {onUpdateDetails && (
         <Dialog open={open} onOpenChange={setOpen}>
-          {/* Sem z-index alto: as alças de resize (z-30) ficam por cima nos
-              cantos para serem agarráveis; o botão continua clicável no restante */}
           <DialogTrigger
-            className={buttonVariants({ variant: "secondary", size: "icon", className: "absolute -top-1 -right-1 h-8 w-8 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-all duration-200 nodrag hover:scale-110 border bg-background" })}
+            className={buttonVariants({ variant: "secondary", size: "icon", className: "absolute -top-1 -right-1 h-8 w-8 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-all duration-200 z-50 nodrag hover:scale-110 border bg-background" })}
           >
             <Settings2 className="h-4 w-4 text-primary" />
           </DialogTrigger>
@@ -238,15 +187,6 @@ function TableNode({ data, selected }: { data: any, selected?: boolean }) {
                   <Input placeholder="Deixe vazio para padrão" value={editColor} onChange={e => setEditColor(e.target.value)} className="flex-1" />
                   <Button variant="outline" size="icon" onClick={() => setEditColor("")} title="Restaurar Padrão"><RotateCcw className="w-4 h-4 text-muted-foreground" /></Button>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Forma da Mesa</Label>
-                <select value={editShape} onChange={e => handleShapeChange(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background">
-                  {TABLE_SHAPES.map(s => (
-                    <option key={s.value} value={s.value}>{s.label}</option>
-                  ))}
-                </select>
-                <p className="text-[11px] text-muted-foreground">Dica: clique na mesa e arraste as alças da borda para aumentar ou diminuir o tamanho.</p>
               </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -291,7 +231,7 @@ function TableNode({ data, selected }: { data: any, selected?: boolean }) {
         <Button 
           variant="destructive" 
           size="icon" 
-          className="absolute -top-1 -left-1 h-8 w-8 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-all duration-200 nodrag hover:scale-110 border bg-background text-destructive" 
+          className="absolute -top-1 -left-1 h-8 w-8 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-all duration-200 z-50 nodrag hover:scale-110 border bg-background text-destructive" 
           onClick={() => onDeleteTable(table.id)}
         >
           <Trash2 className="h-4 w-4" />
@@ -307,7 +247,6 @@ function VenueNode({ data, selected }: { data: any, selected?: boolean }) {
   const [editName, setEditName] = useState(element.name)
   const [editColor, setEditColor] = useState(element.color || "")
   const [editIcon, setEditIcon] = useState(element.icon || "")
-  const [editShape, setEditShape] = useState(element.shape || "RECT")
 
   let config = { bg: "bg-primary/5", border: "border-primary/30", text: "text-primary/70", icon: Box, label: element.name, hex: "#94a3b8" }
   
@@ -320,13 +259,8 @@ function VenueNode({ data, selected }: { data: any, selected?: boolean }) {
   const Icon = element.icon && VENUE_ICONS[element.icon] ? VENUE_ICONS[element.icon] : config.icon
   const customColor = element.color;
   const customStyle = customColor ? { backgroundColor: `${customColor}22`, borderColor: customColor, color: customColor } : {};
-  const venueShape = element.shape || "RECT"
-  const venueRadiusClass = venueShape === "CIRCLE" ? "rounded-full" : "rounded-xl"
-
-  const handleShapeChange = (next: string) => {
-    setEditShape(next)
-    onUpdateVenue?.(element.id, editName, editColor || undefined, editIcon || undefined, next)
-  }
+  // Locais são sempre retangulares e redimensionáveis em todas as direções.
+  const venueRadiusClass = "rounded-xl"
 
   return (
     // O root NÃO tem overflow-hidden: as alças do NodeResizer ficam nas bordas
@@ -376,24 +310,17 @@ function VenueNode({ data, selected }: { data: any, selected?: boolean }) {
                 </select>
               </div>
               <div className="space-y-2">
-                <Label>Forma</Label>
-                <select value={editShape} onChange={e => handleShapeChange(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background">
-                  {VENUE_SHAPES.map(s => (
-                    <option key={s.value} value={s.value}>{s.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-2">
                 <Label>Cor (HEX)</Label>
                 <div className="flex gap-2 items-center">
                   <Input type="color" className="w-12 h-10 p-1" value={editColor || config.hex} onChange={e => setEditColor(e.target.value)} />
                   <Input placeholder="Cor..." value={editColor} onChange={e => setEditColor(e.target.value)} className="flex-1" />
                   <Button variant="outline" size="icon" onClick={() => setEditColor("")} title="Restaurar Padrão"><RotateCcw className="w-4 h-4 text-muted-foreground" /></Button>
                 </div>
+                <p className="text-[11px] text-muted-foreground">Dica: clique no local e arraste as alças da borda para aumentar ou diminuir.</p>
               </div>
             </div>
             <DialogFooter>
-              <Button onClick={() => { onUpdateVenue(element.id, editName, editColor || undefined, editIcon || undefined, editShape || undefined); setOpen(false); }}>Salvar</Button>
+              <Button onClick={() => { onUpdateVenue(element.id, editName, editColor || undefined, editIcon || undefined); setOpen(false); }}>Salvar</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -496,10 +423,6 @@ export function MesasClient({ weddingId, initialTables, initialGuests, initialVe
     setTables(tables.filter(t => t.id !== tableId))
     await deleteTable(weddingId, tableId)
   }
-  const handleUpdateLayout = async (tableId: string, layout: { shape?: string; width?: number; height?: number }) => {
-    setTables(tables.map(t => t.id === tableId ? { ...t, ...layout } : t))
-    await updateTableLayout(weddingId, tableId, layout)
-  }
   const handleCreateTable = () => {
     setPlacementMode('TABLE')
   }
@@ -509,9 +432,9 @@ export function MesasClient({ weddingId, initialTables, initialGuests, initialVe
     setPlacementMode('VENUE')
   }
   
-  const handleUpdateVenueDetails = async (id: string, name: string, color?: string, icon?: string, shape?: string) => {
-    setVenueElements(venueElements.map(v => v.id === id ? { ...v, name, color, icon, ...(shape !== undefined ? { shape } : {}) } : v))
-    import('@/app/actions/venue-elements').then(m => m.updateVenueElementDetails(weddingId, id, name, color, icon, shape))
+  const handleUpdateVenueDetails = async (id: string, name: string, color?: string, icon?: string) => {
+    setVenueElements(venueElements.map(v => v.id === id ? { ...v, name, color, icon } : v))
+    import('@/app/actions/venue-elements').then(m => m.updateVenueElementDetails(weddingId, id, name, color, icon))
   }
   
   const handleDeleteVenue = async (id: string) => {
@@ -626,20 +549,14 @@ export function MesasClient({ weddingId, initialTables, initialGuests, initialVe
         id: `table-${t.id}`,
         type: 'tableNode',
         position: { x: t.x, y: t.y },
-        // Dimensões no nível do nó (não em `style`): o React Flow só marca o
-        // nó como visível quando width/height existem aqui. Via `style` ele
-        // ficava com `visibility: hidden` para sempre e a mesa "sumia".
-        width: t.width || DEFAULT_TABLE_SIZE,
-        height: t.height || DEFAULT_TABLE_SIZE,
-        // Seleção controlada pelo nosso onNodesChange (ver abaixo).
-        selected: !!t.selected,
-        data: { table: t, tableNumber: numberMap.get(t.id), onUpdateDetails: handleUpdateDetails, onUpdateLayout: handleUpdateLayout, onRemoveGuest: handleRemoveGuest, onClearTable: handleClearTable, onDeleteTable: handleDeleteTable }
+        data: { table: t, tableNumber: numberMap.get(t.id), onUpdateDetails: handleUpdateDetails, onRemoveGuest: handleRemoveGuest, onClearTable: handleClearTable, onDeleteTable: handleDeleteTable }
       })),
       ...venueElements.map(v => ({
         id: `venue-${v.id}`,
         type: 'venueNode',
         position: { x: v.x, y: v.y },
-        // Mesmo motivo das mesas: dimensões no nó para garantir visibilidade.
+        // Dimensões no nível do nó (não em `style`): o React Flow só marca o
+        // nó como visível quando width/height existem aqui.
         width: v.width || 200,
         height: v.height || 200,
         selected: !!v.selected,
@@ -705,12 +622,9 @@ export function MesasClient({ weddingId, initialTables, initialGuests, initialVe
           return
         }
         const finalPos = rfInstance?.getNode(id)?.position
-        if (id.startsWith('table-')) {
-          const dbId = id.replace('table-', '')
-          setTables(prev => prev.map(t => t.id === dbId ? { ...t, width, height, ...(finalPos ? { x: finalPos.x, y: finalPos.y } : {}) } : t))
-          updateTableLayout(weddingId, dbId, { width, height })
-          if (finalPos) updateTablePosition(weddingId, dbId, finalPos.x, finalPos.y)
-        } else if (id.startsWith('venue-')) {
+        // Só locais são redimensionáveis (mesas são círculos fixos e não
+        // emitem changes de dimensão).
+        if (id.startsWith('venue-')) {
           const dbId = id.replace('venue-', '')
           setVenueElements(prev => prev.map(v => v.id === dbId ? { ...v, width, height, ...(finalPos ? { x: finalPos.x, y: finalPos.y } : {}) } : v))
           import('@/app/actions/venue-elements').then(m => {
