@@ -130,32 +130,32 @@ function TableNode({ data }: { data: any }) {
   return (
     // Mesa sempre redonda e de tamanho fixo — só os locais são redimensionáveis.
     <div className="group relative" ref={setDropRef}>
-      {/* Número da mesa (numeração automática para o buffet/impressão) */}
-      {tableNumber != null && (
-        <span
-          title={`Mesa Nº ${tableNumber}`}
-          className="absolute -top-2 -left-2 flex h-7 w-7 items-center justify-center rounded-full bg-foreground text-background text-xs font-bold shadow-md border border-background"
-        >
-          {tableNumber}
-        </span>
-      )}
-      {/* Alerta de restrição alimentar: badge com contador, embaixo da mesa */}
-      {dietaryCount > 0 && (
-        <span
-          title={`Atenção do buffet — ${dietaryCount} com restrição alimentar:\n${dietaryTooltip}`}
-          className="absolute -bottom-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 rounded-full bg-amber-400 text-amber-950 text-[11px] font-bold shadow-md border border-amber-500 px-2 py-0.5 whitespace-nowrap"
-        >
-          <WheatOff className="w-3.5 h-3.5" />
-          {dietaryCount} {dietaryCount === 1 ? "restrição" : "restrições"}
-        </span>
-      )}
-      <div data-testid={`table-shape-${table.id}`} className={`w-32 h-32 rounded-full border-[4px] flex flex-col items-center justify-center shadow-lg transition-all duration-300 ${isOver ? "border-primary bg-primary/10 scale-110 shadow-primary/20" : "hover:scale-105"} ${!customColor ? "bg-gradient-to-br from-background to-muted border-border hover:border-primary/40 hover:shadow-xl" : ""}`} style={isOver ? undefined : colorStyle}>
+      <div data-testid={`table-shape-${table.id}`} className={`w-32 h-32 rounded-full border-[4px] flex flex-col items-center justify-center shadow-lg transition-all duration-300 overflow-hidden px-2 py-1 ${isOver ? "border-primary bg-primary/10 scale-110 shadow-primary/20" : "hover:scale-105"} ${!customColor ? "bg-gradient-to-br from-background to-muted border-border hover:border-primary/40 hover:shadow-xl" : ""}`} style={isOver ? undefined : colorStyle}>
         <div className="absolute inset-1 rounded-full border border-primary/10 pointer-events-none"></div>
-        <span className="font-semibold text-center text-sm px-3 line-clamp-2 leading-tight z-10">{table.name}</span>
-        <span className={`text-xs font-medium flex items-center mt-2 px-2.5 py-0.5 rounded-full z-10 shadow-sm border ${isFull ? 'bg-destructive/10 text-destructive border-destructive/20' : 'bg-background text-muted-foreground border-border'}`}>
+        {/* Número da mesa dentro do círculo, acima do nome */}
+        {tableNumber != null && (
+          <span
+            title={`Mesa Nº ${tableNumber}`}
+            className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-background text-[11px] font-bold shadow-sm z-10 mb-1"
+          >
+            {tableNumber}
+          </span>
+        )}
+        <span className="font-semibold text-center text-sm px-2 line-clamp-2 leading-tight z-10">{table.name}</span>
+        <span className={`text-xs font-medium flex items-center mt-1 px-2.5 py-0.5 rounded-full z-10 shadow-sm border ${isFull ? 'bg-destructive/10 text-destructive border-destructive/20' : 'bg-background text-muted-foreground border-border'}`}>
           <Users className="w-3 h-3 mr-1.5" />
           {table.guests?.length || 0}/{table.capacity}
         </span>
+        {/* Restrição alimentar: só a quantidade, abaixo da ocupação */}
+        {dietaryCount > 0 && (
+          <span
+            title={`Atenção do buffet — ${dietaryCount} com restrição alimentar:\n${dietaryTooltip}`}
+            className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-400 text-amber-950 text-[10px] font-bold shadow-sm border border-amber-500 px-1.5 py-px z-10"
+          >
+            <WheatOff className="w-3 h-3" />
+            {dietaryCount}
+          </span>
+        )}
       </div>
       
       {onUpdateDetails && (
